@@ -14,7 +14,7 @@ export interface DxfOptions {
 }
 
 /**
- * Export the cut boundaries of a drawing as R12 DXF, 1:1.
+ * Export the cut boundaries of a drawing as DXF, 1:1, as LWPOLYLINEs.
  *
  * Coordinates are re-originated so the pattern's own top-left is (0, 0), with
  * y flipped to a conventional y-up CAD frame, in the caller's display unit.

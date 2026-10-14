@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "export:sample": "node scripts/export-sample.ts",
+    "export:verify": "node scripts/verify-exports.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "lint": "oxlint src functions"
   },

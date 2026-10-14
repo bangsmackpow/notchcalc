@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Unit } from './geometry/types.ts'
 import { useSettings } from './state/settings.ts'
 import { useJoint } from './state/joint.ts'
@@ -90,7 +91,7 @@ export default function App() {
           )}
         </main>
       </div>
-      <div id="print-area" />
+      {createPortal(<div id="print-area" />, document.body)}
     </>
   )
 }

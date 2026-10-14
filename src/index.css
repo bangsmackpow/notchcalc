@@ -26,12 +26,13 @@ body {
 
 @media print {
   html,
-  body {
+  body,
+  #root {
     height: auto;
     background: #fff;
   }
 
-  body > *:not(#print-area),
+  /* Hide the app UI; the print sheets live in #print-area (a child of <body>). */
   .app-shell {
     display: none !important;
   }

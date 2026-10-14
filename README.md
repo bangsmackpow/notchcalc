@@ -47,6 +47,13 @@ npm run lint       # oxlint
 npm run build      # production build -> dist/
 ```
 
+Generate sample PDF/DXF/SVG files into `tmp/` and check them:
+
+```bash
+npm run export:sample    # writes tmp/<case>.pdf|.dxf|.svg
+npm run export:verify    # reports page counts, DXF polyline vertex counts, etc.
+```
+
 ### Project layout
 
 ```

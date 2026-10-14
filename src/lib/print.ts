@@ -24,7 +24,8 @@ export function printDrawings(items: PrintItem[]): void {
   style.textContent = `@page { size: ${p0.pageW}mm ${p0.pageH}mm; margin: 0; }`
 
   area.innerHTML = usable.map((it) => renderPrintHTML(it.drawing, it.pages)).join('\n')
-  window.print()
+  // Give the browser a frame to lay the sheets out before opening the dialog.
+  requestAnimationFrame(() => window.print())
 }
 
 export function printDrawing(drawing: Drawing, pages: Page[]): void {
