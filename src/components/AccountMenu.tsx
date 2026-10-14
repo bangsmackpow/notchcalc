@@ -94,19 +94,23 @@ export function AccountMenu() {
           </button>
         </div>
       )}
-      {secOpen && <TwoFactorDialog onClose={() => setSecOpen(false)} />}
+      {secOpen && <TwoFactorDialog onClose={() => setSecOpen(false)} enabled={!!session.user.twoFactorEnabled} />}
     </div>
   )
 }
 
-function TwoFactorDialog({ onClose }: { onClose: () => void }) {
+/** Body cast helper: the client type marks `password` required, but with
+ *  allowPasswordless the server accepts its omission for social accounts. */
+type TwoFactorBody = { password?: string }
+
+function TwoFactorDialog({ onClose, enabled }: { onClose: () => void; enabled: boolean }) {
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [totpURI, setTotpURI] = useState('')
   const [qr, setQr] = useState('')
   const [backupCodes, setBackupCodes] = useState<string[]>([])
+  const [needsPassword, setNeedsPassword] = useState(false)
   const [error, setError] = useState('')
-  const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -117,47 +121,92 @@ function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       .catch(() => setQr(''))
   }, [totpURI])
 
-  const enable = async () => {
+  const call = async (fn: () => Promise<void>) => {
     setError('')
     setBusy(true)
     try {
-      const res = await authClient.twoFactor.enable({ password })
-      if (res.error) throw new Error(res.error.message)
+      await fn()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const enable = () =>
+    call(async () => {
+      const body: TwoFactorBody = needsPassword ? { password } : {}
+      const res = await authClient.twoFactor.enable(body as never)
+      if (res.error) {
+        const msg = res.error.message ?? 'Could not enable two-factor'
+        if (!needsPassword && /password/i.test(msg)) {
+          setNeedsPassword(true)
+          throw new Error('This account has a password — enter it to confirm, then click Set up again.')
+        }
+        throw new Error(msg)
+      }
       const data = res.data as { totpURI?: string; backupCodes?: string[] } | null
       setTotpURI(data?.totpURI ?? '')
       setBackupCodes(data?.backupCodes ?? [])
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'failed')
-    } finally {
-      setBusy(false)
-    }
-  }
+    })
 
-  const verify = async () => {
-    setError('')
-    setBusy(true)
-    try {
+  const verify = () =>
+    call(async () => {
       const res = await authClient.twoFactor.verifyTotp({ code })
       if (res.error) throw new Error(res.error.message)
-      setDone(true)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'failed')
-    } finally {
-      setBusy(false)
-    }
-  }
+      onClose()
+    })
+
+  const disable = () =>
+    call(async () => {
+      const body: TwoFactorBody = needsPassword ? { password } : {}
+      const res = await authClient.twoFactor.disable(body as never)
+      if (res.error) {
+        const msg = res.error.message ?? 'Could not disable two-factor'
+        if (!needsPassword && /password/i.test(msg)) {
+          setNeedsPassword(true)
+          throw new Error('This account has a password — enter it to confirm, then click Disable again.')
+        }
+        throw new Error(msg)
+      }
+      onClose()
+    })
 
   const secret = /secret=([^&]+)/.exec(totpURI)?.[1] ?? ''
+
+  if (enabled && !totpURI) {
+    return (
+      <Modal title="Two-factor authentication" onClose={onClose}>
+        <div className="space-y-3 text-sm">
+          <p className="text-green-700">Two-factor is currently <b>on</b> for your account.</p>
+          <p className="text-slate-500">
+            Note: email/password sign-ins are challenged for the code. Google sign-ins are not challenged
+            (BetterAuth limitation).
+          </p>
+          {needsPassword && <TextInput label="Password" value={password} onChange={setPassword} type="password" />}
+          {error && <p className="text-red-600">{error}</p>}
+          <div className="flex justify-end gap-2 pt-1">
+            <Btn onClick={onClose} variant="ghost">
+              Close
+            </Btn>
+            <Btn onClick={disable} disabled={busy} variant="danger">
+              {busy ? '…' : 'Disable'}
+            </Btn>
+          </div>
+        </div>
+      </Modal>
+    )
+  }
 
   return (
     <Modal title="Two-factor authentication" onClose={onClose}>
       <div className="space-y-3 text-sm">
-        {done ? (
-          <p className="text-green-700">Two-factor is enabled for your account.</p>
-        ) : totpURI ? (
+        {totpURI ? (
           <>
             <p className="text-slate-500">Scan this QR with your authenticator app, then enter a code to confirm.</p>
-            {qr && <img src={qr} alt="TOTP QR" className="mx-auto rounded-lg border border-slate-200" width={180} height={180} />}
+            {qr && (
+              <img src={qr} alt="TOTP QR" className="mx-auto rounded-lg border border-slate-200" width={180} height={180} />
+            )}
             <div className="rounded-md bg-slate-50 p-2">
               <div className="text-xs text-slate-400">Secret (manual entry)</div>
               <code className="break-all text-xs">{secret || totpURI}</code>
@@ -172,8 +221,10 @@ function TwoFactorDialog({ onClose }: { onClose: () => void }) {
           </>
         ) : (
           <>
-            <p className="text-slate-500">Confirm your password to set up an authenticator app.</p>
-            <TextInput label="Password" value={password} onChange={setPassword} type="password" />
+            <p className="text-slate-500">
+              Set up an authenticator app. No password needed unless this account also has one.
+            </p>
+            {needsPassword && <TextInput label="Password" value={password} onChange={setPassword} type="password" />}
           </>
         )}
 
@@ -183,11 +234,9 @@ function TwoFactorDialog({ onClose }: { onClose: () => void }) {
           <Btn onClick={onClose} variant="ghost">
             Close
           </Btn>
-          {!done && (
-            <Btn onClick={totpURI ? verify : enable} disabled={busy}>
-              {busy ? '…' : totpURI ? 'Confirm' : 'Set up'}
-            </Btn>
-          )}
+          <Btn onClick={totpURI ? verify : enable} disabled={busy}>
+            {busy ? '…' : totpURI ? 'Confirm' : 'Set up'}
+          </Btn>
         </div>
       </div>
     </Modal>

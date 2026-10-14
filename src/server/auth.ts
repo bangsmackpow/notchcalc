@@ -21,7 +21,9 @@ export function createAuth(env: Env, origin: string) {
     database: env.DB,
     emailAndPassword: { enabled: true, minPasswordLength: 8 },
     socialProviders,
-    plugins: [twoFactor()],
+    // allowPasswordless: Google-only accounts have no local password, so the
+    // password step is dropped for them (still required for email accounts).
+    plugins: [twoFactor({ allowPasswordless: true })],
     trustedOrigins: Array.from(new Set([origin, env.BETTER_AUTH_URL ?? origin])),
     rateLimit: {
       enabled: true,
