@@ -5,11 +5,20 @@ export interface Mail {
   subject: string
   text: string
   html?: string
+  /** short tag for the delivery log, e.g. "verify" */
+  kind?: string
 }
 
-/** Sends via Resend. Returns false when no API key is configured or the call fails. */
+/**
+ * Sends via Resend and records the outcome in `mail_log` so delivery problems
+ * (bad key, unverified domain, bounce) are diagnosable without worker logs.
+ */
 export async function sendEmail(env: Env, mail: Mail): Promise<boolean> {
   if (!env.RESEND_API_KEY) return false
+
+  let ok = false
+  let status = 0
+  let detail = ''
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -25,10 +34,23 @@ export async function sendEmail(env: Env, mail: Mail): Promise<boolean> {
         ...(mail.html ? { html: mail.html } : {}),
       }),
     })
-    if (!res.ok) console.error('resend error', res.status, await res.text().catch(() => ''))
-    return res.ok
+    status = res.status
+    ok = res.ok
+    if (!res.ok) detail = (await res.text().catch(() => '')).slice(0, 400)
   } catch (e) {
-    console.error('resend fetch failed', e)
-    return false
+    detail = String(e).slice(0, 400)
   }
+
+  try {
+    await env.DB.prepare(
+      'INSERT INTO mail_log (id, email, kind, ok, status, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(crypto.randomUUID(), mail.to, mail.kind ?? 'generic', ok ? 1 : 0, status, detail, Date.now())
+      .run()
+  } catch (e) {
+    console.error('mail_log write failed', e)
+  }
+
+  if (!ok) console.error('resend error', status, detail)
+  return ok
 }

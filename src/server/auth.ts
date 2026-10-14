@@ -47,6 +47,7 @@ export function createAuth(env: Env, origin: string) {
         // promise would be cancelled once the Worker response returns.
         const sent = await sendEmail(env, {
           to: user.email,
+          kind: 'verify',
           subject: 'Verify your notchcalc email',
           text: `Confirm your email to finish setting up your account: ${url}`,
           html: `<p>Confirm your email to finish setting up your <b>notchcalc</b> account:</p><p><a href="${url}">Verify email</a></p>`,

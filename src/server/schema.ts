@@ -42,4 +42,13 @@ CREATE TABLE IF NOT EXISTS invites (
   created_at INTEGER NOT NULL,
   used_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS mail_log (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  ok INTEGER NOT NULL,
+  status INTEGER,
+  detail TEXT,
+  created_at INTEGER NOT NULL
+);
 `
