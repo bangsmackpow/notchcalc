@@ -38,26 +38,29 @@ export function createAuth(env: Env, origin: string) {
       },
     },
     emailVerification: {
+      // Required: without sendOnSignUp BetterAuth creates the user but never
+      // dispatches a verification email.
+      sendOnSignUp: true,
       autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, url }) => {
-        // Never await user-facing flows on email delivery.
-        void sendEmail(env, {
+        // Await the send: BetterAuth awaits this handler, and a floating
+        // promise would be cancelled once the Worker response returns.
+        const sent = await sendEmail(env, {
           to: user.email,
           subject: 'Verify your notchcalc email',
           text: `Confirm your email to finish setting up your account: ${url}`,
           html: `<p>Confirm your email to finish setting up your <b>notchcalc</b> account:</p><p><a href="${url}">Verify email</a></p>`,
-        }).then(async (sent) => {
-          if (!sent && !env.RESEND_API_KEY) {
-            // No email transport configured (dev/demo): auto-verify so sign-up
-            // is not a dead end. With RESEND_API_KEY set but failing, leave
-            // the account unverified and surface the error in logs.
-            try {
-              await env.DB.prepare(`UPDATE "user" SET "emailVerified" = 1 WHERE "id" = ?`).bind(user.id).run()
-            } catch (e) {
-              console.error('auto-verify fallback failed', e)
-            }
-          }
         })
+        if (!sent && !env.RESEND_API_KEY) {
+          // No email transport configured (dev/demo): auto-verify so sign-up
+          // is not a dead end. With RESEND_API_KEY set but failing, leave the
+          // account unverified and surface the error in logs.
+          try {
+            await env.DB.prepare(`UPDATE "user" SET "emailVerified" = 1 WHERE "id" = ?`).bind(user.id).run()
+          } catch (e) {
+            console.error('auto-verify fallback failed', e)
+          }
+        }
       },
     },
   })

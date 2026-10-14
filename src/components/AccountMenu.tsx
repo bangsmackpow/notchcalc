@@ -10,6 +10,7 @@ export function AccountMenu() {
   const [secOpen, setSecOpen] = useState(false)
   const [inviteOnly, setInviteOnly] = useState(false)
   const [inviteMsg, setInviteMsg] = useState('')
+  const [verifyMsg, setVerifyMsg] = useState('')
 
   useEffect(() => {
     if (!session) return
@@ -31,6 +32,17 @@ export function AccountMenu() {
   }
 
   const email = session.user.email
+
+  const resendVerify = async () => {
+    setVerifyMsg('')
+    try {
+      const res = await authClient.sendVerificationEmail({ email, callbackURL: window.location.origin })
+      if (res.error) throw new Error(res.error.message)
+      setVerifyMsg('Verification email sent — check your inbox (and spam).')
+    } catch (e) {
+      setVerifyMsg(e instanceof Error ? e.message : 'Could not send')
+    }
+  }
 
   const newInvite = async () => {
     setInviteMsg('')
@@ -60,7 +72,11 @@ export function AccountMenu() {
         <div className="absolute right-0 z-40 mt-1 w-64 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
           {session.user.emailVerified === false && (
             <div className="mx-1 mb-1 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              Confirm your email — check your inbox for the verification link.
+              <p>Confirm your email to secure your account.</p>
+              <button className="mt-1 font-medium underline" onClick={resendVerify}>
+                Resend verification email
+              </button>
+              {verifyMsg && <p className="mt-1 text-amber-800">{verifyMsg}</p>}
             </div>
           )}
           {inviteOnly && (
