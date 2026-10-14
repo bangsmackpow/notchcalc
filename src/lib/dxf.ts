@@ -20,31 +20,45 @@ export interface DxfOptions {
  * y flipped to a conventional y-up CAD frame, in the caller's display unit.
  */
 export function buildDxf(drawing: Drawing, unit: Unit, opts: DxfOptions = {}): string {
+  return buildDxfMany([drawing], unit, opts)
+}
+
+/** Lay several patterns out side by side in one DXF (each on the cut layer). */
+export function buildDxfMany(drawings: Drawing[], unit: Unit, opts: DxfOptions = {}): string {
   const d = new DxfWriter()
   d.setUnits(unit === 'in' ? 'Inches' : 'Millimeters')
   d.addLayer('cut', DxfWriter.ACI.RED, 'CONTINUOUS')
   d.addLayer('bounds', DxfWriter.ACI.BLUE, 'DASHED')
-  d.setActiveLayer('cut')
 
-  const w = drawing.wrap
-  const conv = (pts: DPoint[]): [number, number][] =>
-    pts.map((p) => [fromMm(p.x - w.x, unit), fromMm(w.y + w.h - p.y, unit)] as [number, number])
+  const gap = fromMm(20, unit)
+  let cursor = 0
 
-  for (const path of drawing.cutPaths) {
-    if (path.length >= 2) d.drawPolyline(conv(path), false)
-  }
+  for (const drawing of drawings) {
+    const w = drawing.wrap
+    d.setActiveLayer('cut')
+    const conv = (pts: DPoint[]): [number, number][] =>
+      pts.map((p) => [fromMm(p.x - w.x, unit) + cursor, fromMm(w.y + w.h - p.y, unit)] as [number, number])
 
-  if (opts.includeBounds !== false) {
-    d.setActiveLayer('bounds')
-    d.drawPolyline(
-      [
-        [0, 0],
-        [fromMm(w.w, unit), 0],
-        [fromMm(w.w, unit), fromMm(w.h, unit)],
-        [0, fromMm(w.h, unit)],
-      ],
-      true,
-    )
+    for (const path of drawing.cutPaths) {
+      if (path.length >= 2) d.drawPolyline(conv(path), false)
+    }
+
+    if (opts.includeBounds !== false) {
+      d.setActiveLayer('bounds')
+      const bw = fromMm(w.w, unit)
+      const bh = fromMm(w.h, unit)
+      d.drawPolyline(
+        [
+          [cursor, 0],
+          [cursor + bw, 0],
+          [cursor + bw, bh],
+          [cursor, bh],
+        ],
+        true,
+      )
+    }
+
+    cursor += fromMm(w.w, unit) + gap
   }
 
   return d.toDxfString()

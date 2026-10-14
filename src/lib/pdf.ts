@@ -158,10 +158,19 @@ function drawPage(doc: PDFDocument, drawing: Drawing, pg: Page, helv: PDFFont, h
   }
 }
 
-export async function buildPdf(drawing: Drawing, pages: Page[]): Promise<Uint8Array> {
+export interface PdfItem {
+  drawing: Drawing
+  pages: Page[]
+}
+
+export async function buildPdfMany(items: PdfItem[]): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
   const helv = await doc.embedFont(StandardFonts.Helvetica)
   const helvB = await doc.embedFont(StandardFonts.HelveticaBold)
-  for (const pg of pages) drawPage(doc, drawing, pg, helv, helvB)
+  for (const it of items) for (const pg of it.pages) drawPage(doc, it.drawing, pg, helv, helvB)
   return doc.save()
+}
+
+export async function buildPdf(drawing: Drawing, pages: Page[]): Promise<Uint8Array> {
+  return buildPdfMany([{ drawing, pages }])
 }

@@ -13,16 +13,20 @@
     "lint": "oxlint src"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.1",
     "dxf-writer": "^1.18.4",
     "pdf-lib": "^1.17.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "three": "^0.186.1",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.2",
     "oxlint": "^1.88.0",
     "tailwindcss": "^4.3.3",
