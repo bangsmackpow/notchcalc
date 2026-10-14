@@ -4,7 +4,7 @@ import { handle } from 'hono/cloudflare-pages'
 import { createAuth, type Auth } from '../../src/server/auth.ts'
 import { projectRoutes } from '../../src/server/projects.ts'
 import { ensureSchema } from '../../src/server/schema.ts'
-import { isEmailVerificationOn, isInviteOnly, type Env } from '../../src/server/env.ts'
+import { isEmailVerificationOn, isInviteOnly, normalizeBase, type Env } from '../../src/server/env.ts'
 
 type AppEnv = { Bindings: Env; Variables: { auth: Auth | null } }
 
@@ -19,7 +19,7 @@ app.get('/api/health', (c) =>
     google: !!(c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET),
     emailVerification: isEmailVerificationOn(c.env),
     inviteOnly: isInviteOnly(c.env),
-    baseURL: c.env.BETTER_AUTH_URL ?? new URL(c.req.url).origin,
+    baseURL: normalizeBase(c.env.BETTER_AUTH_URL ?? new URL(c.req.url).origin),
   }),
 )
 

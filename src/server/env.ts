@@ -14,3 +14,7 @@ export interface Env {
 
 export const isInviteOnly = (env: Env): boolean => env.INVITE_ONLY === 'true'
 export const isEmailVerificationOn = (env: Env): boolean => !!env.RESEND_API_KEY
+
+/** Strip trailing slashes — a mis-set BETTER_AUTH_URL would otherwise
+ *  produce `//api/auth/...` in Google callback / verification links. */
+export const normalizeBase = (url: string): string => url.replace(/\/+$/, '')

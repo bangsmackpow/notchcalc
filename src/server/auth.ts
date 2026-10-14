@@ -1,7 +1,7 @@
 import { betterAuth } from 'better-auth'
 import { twoFactor } from 'better-auth/plugins'
 import { sendEmail } from './email.ts'
-import type { Env } from './env.ts'
+import { normalizeBase, type Env } from './env.ts'
 
 export function createAuth(env: Env, origin: string) {
   const socialProviders =
@@ -14,9 +14,11 @@ export function createAuth(env: Env, origin: string) {
         }
       : undefined
 
+  const base = normalizeBase(env.BETTER_AUTH_URL ?? origin)
+
   return betterAuth({
     appName: 'notchcalc',
-    baseURL: env.BETTER_AUTH_URL ?? origin,
+    baseURL: base,
     secret: env.BETTER_AUTH_SECRET,
     database: env.DB,
     emailAndPassword: { enabled: true, minPasswordLength: 8 },
@@ -24,7 +26,7 @@ export function createAuth(env: Env, origin: string) {
     // allowPasswordless: Google-only accounts have no local password, so the
     // password step is dropped for them (still required for email accounts).
     plugins: [twoFactor({ allowPasswordless: true })],
-    trustedOrigins: Array.from(new Set([origin, env.BETTER_AUTH_URL ?? origin])),
+    trustedOrigins: Array.from(new Set([origin, base])),
     rateLimit: {
       enabled: true,
       storage: 'database',
