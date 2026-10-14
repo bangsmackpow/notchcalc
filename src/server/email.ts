@@ -14,7 +14,10 @@ export interface Mail {
  * (bad key, unverified domain, bounce) are diagnosable without worker logs.
  */
 export async function sendEmail(env: Env, mail: Mail): Promise<boolean> {
-  if (!env.RESEND_API_KEY) return false
+  if (!env.RESEND_API_KEY) {
+    await logMail(env, mail, false, 0, 'no RESEND_API_KEY at runtime')
+    return false
+  }
 
   let ok = false
   let status = 0
@@ -41,6 +44,12 @@ export async function sendEmail(env: Env, mail: Mail): Promise<boolean> {
     detail = String(e).slice(0, 400)
   }
 
+  await logMail(env, mail, ok, status, detail)
+  if (!ok) console.error('resend error', status, detail)
+  return ok
+}
+
+async function logMail(env: Env, mail: Mail, ok: boolean, status: number, detail: string): Promise<void> {
   try {
     await env.DB.prepare(
       'INSERT INTO mail_log (id, email, kind, ok, status, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -50,7 +59,4 @@ export async function sendEmail(env: Env, mail: Mail): Promise<boolean> {
   } catch (e) {
     console.error('mail_log write failed', e)
   }
-
-  if (!ok) console.error('resend error', status, detail)
-  return ok
 }

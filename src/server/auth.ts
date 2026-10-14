@@ -58,6 +58,11 @@ export function createAuth(env: Env, origin: string) {
           // account unverified and surface the error in logs.
           try {
             await env.DB.prepare(`UPDATE "user" SET "emailVerified" = 1 WHERE "id" = ?`).bind(user.id).run()
+            await env.DB.prepare(
+              'INSERT INTO mail_log (id, email, kind, ok, status, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            )
+              .bind(crypto.randomUUID(), user.email, 'auto-verify', 1, 0, 'no transport configured', Date.now())
+              .run()
           } catch (e) {
             console.error('auto-verify fallback failed', e)
           }
