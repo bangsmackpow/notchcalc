@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- print ---------- */
+
+#print-area {
+  display: none;
+}
+
+@media print {
+  html,
+  body {
+    height: auto;
+    background: #fff;
+  }
+
+  body > *:not(#print-area),
+  .app-shell {
+    display: none !important;
+  }
+
+  #print-area {
+    display: block !important;
+  }
+
+  .print-page {
+    break-after: page;
+    page-break-after: always;
+    overflow: hidden;
+  }
+
+  .print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
