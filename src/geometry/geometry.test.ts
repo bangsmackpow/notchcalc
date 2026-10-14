@@ -92,9 +92,14 @@ describe('miterCut', () => {
     expect(t.maxCut).toBeCloseTo(amp, 9)
     expect(t.minCut).toBeCloseTo(-amp, 9)
   })
-  it('miterForJointAngle halves the joint angle', () => {
+  it('a 90° elbow joint equals a 45° cut each end', () => {
     const a = miterForJointAngle(2, 90, N)
     const b = miterCut({ od: 2, angleDeg: 45, samples: N })
+    expect(a.depth).toBeCloseTo(b.depth, 10)
+  })
+  it('joint angle convention: cut = 90° − joint/2', () => {
+    const a = miterForJointAngle(2, 170, N)
+    const b = miterCut({ od: 2, angleDeg: 5, samples: N })
     expect(a.depth).toBeCloseTo(b.depth, 10)
   })
 })
@@ -135,8 +140,9 @@ describe('generate() dispatch', () => {
     const out = generate({ ...base, kind: 'miter' })
     expect(out[0].kind).toBe('miter')
   })
-  it('hole → one hole template', () => {
+  it('hole → branch notch + header hole templates', () => {
     const out = generate({ ...base, kind: 'hole' })
-    expect(out[0].kind).toBe('hole')
+    expect(out).toHaveLength(2)
+    expect(out.map((t) => t.kind)).toEqual(['branch', 'hole'])
   })
 })

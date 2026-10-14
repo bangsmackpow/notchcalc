@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { JointKind } from '../geometry/index.ts'
 import { DEFAULT_ASSEMBLY, distribute, makeBranch } from './model.ts'
 import type { Assembly, Branch } from './model.ts'
 
@@ -7,7 +8,7 @@ interface AssemblyStore {
   headerLength: number
   branches: Branch[]
   selectedId: string | null
-  addBranch: (odMm: number) => void
+  addConnection: (kind: JointKind, odMm: number) => void
   updateBranch: (id: string, patch: Partial<Omit<Branch, 'id'>>) => void
   removeBranch: (id: string) => void
   select: (id: string | null) => void
@@ -24,8 +25,8 @@ export const useAssembly = create<AssemblyStore>((set, get) => ({
   branches: DEFAULT_ASSEMBLY.branches,
   selectedId: null,
 
-  addBranch: (odMm) => {
-    const b = makeBranch(odMm, 0)
+  addConnection: (kind, odMm) => {
+    const b = makeBranch(odMm, 0, kind)
     const next = [...get().branches, b]
     set({
       branches: distribute(next, get().headerOD, get().headerLength),

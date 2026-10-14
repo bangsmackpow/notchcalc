@@ -1,23 +1,28 @@
 import { useEffect, useState } from 'react'
 import { authClient } from '../lib/auth-client.ts'
+import { useSettings } from '../state/settings.ts'
 import { Btn, Modal, TextInput } from './ui.tsx'
 
-type Stage = 'signin' | 'signup' | 'totp'
+type Stage = 'signin' | 'signup' | 'totp' | 'sent'
 
 interface Health {
   ok: boolean
   db: boolean
   authSecret: boolean
   google: boolean
+  emailVerification: boolean
+  inviteOnly: boolean
   baseURL: string
 }
 
 export function AuthDialog({ onClose }: { onClose: () => void }) {
-  const [stage, setStage] = useState<Stage>('signin')
+  const invite = useSettings((s) => s.invite)
+  const [stage, setStage] = useState<Stage>(invite ? 'signup' : 'signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
+  const [inviteCode, setInviteCode] = useState(invite)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [health, setHealth] = useState<Health | null>(null)
@@ -52,14 +57,39 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
         }
         onClose()
       } else if (stage === 'signup') {
-        const res = await authClient.signUp.email({ email, password, name: name || email })
+        const res = await authClient.signUp.email(
+          { email, password, name: name || email },
+          inviteCode ? ({ query: { i: inviteCode } } as never) : undefined,
+        )
         if (res.error) throw new Error(res.error.message)
-        onClose()
-      } else {
+        const data = res.data as { session?: unknown } | undefined
+        if (data?.session) {
+          onClose()
+          return
+        }
+        if (!health?.emailVerification) {
+          // Transport-less dev mode: the server auto-verifies, so sign straight in.
+          const s = await authClient.signIn.email({ email, password })
+          if (s.error) throw new Error(s.error.message)
+          if ((s.data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect) {
+            setStage('totp')
+            return
+          }
+          onClose()
+          return
+        }
+        setStage('sent')
+      } else if (stage === 'totp') {
         const res = await authClient.twoFactor.verifyTotp({ code })
         if (res.error) throw new Error(res.error.message)
         onClose()
       }
+    })
+
+  const resend = () =>
+    run(async () => {
+      const res = await authClient.sendVerificationEmail({ email, callbackURL: window.location.origin })
+      if (res.error) throw new Error(res.error.message)
     })
 
   const google = () =>
@@ -68,13 +98,11 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
       if (res?.error) {
         const e = res.error as { message?: string; status?: number; statusText?: string }
         console.error('google sign-in error', res.error)
-        throw new Error(
-          `${e.message ?? e.statusText ?? 'Google sign-in failed'}${e.status ? ` (HTTP ${e.status})` : ''}`,
-        )
+        throw new Error(`${e.message ?? e.statusText ?? 'Google sign-in failed'}${e.status ? ` (HTTP ${e.status})` : ''}`)
       }
     })
 
-  const title = stage === 'signup' ? 'Create account' : stage === 'totp' ? 'Two-factor code' : 'Sign in'
+  const title = stage === 'signup' ? 'Create account' : stage === 'totp' ? 'Two-factor code' : stage === 'sent' ? 'Confirm your email' : 'Sign in'
 
   return (
     <Modal title={title} onClose={onClose}>
@@ -84,33 +112,53 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
             <p className="text-sm text-slate-500">Enter the 6-digit code from your authenticator app.</p>
             <TextInput label="Code" value={code} onChange={setCode} placeholder="123456" />
           </>
+        ) : stage === 'sent' ? (
+          <p className="text-sm text-slate-600">
+            We sent a verification link to <b>{email}</b>. Open it on this device to finish — you can close this
+            window afterwards.
+          </p>
         ) : (
           <>
             {stage === 'signup' && <TextInput label="Name" value={name} onChange={setName} placeholder="Your name" />}
             <TextInput label="Email" value={email} onChange={setEmail} type="email" placeholder="you@example.com" />
             <TextInput label="Password" value={password} onChange={setPassword} type="password" placeholder="min 8 characters" />
+            {stage === 'signup' && (health?.inviteOnly || invite) && (
+              <TextInput label="Invite code" value={inviteCode} onChange={setInviteCode} placeholder="from an invite link" />
+            )}
           </>
         )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <div className="flex items-center justify-between pt-1">
-          <button
-            className="text-sm text-slate-500 hover:text-slate-800"
-            onClick={() => {
-              setError('')
-              setStage(stage === 'signup' ? 'signin' : 'signup')
-            }}
-            disabled={stage === 'totp'}
-          >
-            {stage === 'signup' ? 'Have an account? Sign in' : 'No account? Sign up'}
-          </button>
-          <Btn onClick={submit} disabled={busy}>
-            {busy ? '…' : stage === 'signup' ? 'Create' : stage === 'totp' ? 'Verify' : 'Sign in'}
-          </Btn>
-        </div>
+        {stage !== 'sent' && (
+          <div className="flex items-center justify-between pt-1">
+            {stage !== 'totp' ? (
+              <button
+                className="text-sm text-slate-500 hover:text-slate-800"
+                onClick={() => {
+                  setError('')
+                  setStage(stage === 'signup' ? 'signin' : 'signup')
+                }}
+              >
+                {stage === 'signup' ? 'Have an account? Sign in' : 'No account? Sign up'}
+              </button>
+            ) : (
+              <span />
+            )}
+            <Btn onClick={submit} disabled={busy}>
+              {busy ? '…' : stage === 'signup' ? 'Create' : stage === 'totp' ? 'Verify' : 'Sign in'}
+            </Btn>
+          </div>
+        )}
+        {stage === 'sent' && (
+          <div className="flex justify-end">
+            <Btn onClick={resend} disabled={busy} variant="ghost">
+              Resend email
+            </Btn>
+          </div>
+        )}
 
-        {stage !== 'totp' && health?.google && (
+        {stage === 'signin' && health?.google && (
           <>
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <div className="h-px flex-1 bg-slate-200" /> or <div className="h-px flex-1 bg-slate-200" />
@@ -120,16 +168,16 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
             </Btn>
           </>
         )}
-        {stage !== 'totp' && health && !health.google && (
+        {stage === 'signin' && health && !health.google && (
           <p className="text-xs text-slate-400">Google sign-in is not configured on this deployment.</p>
         )}
-        {stage !== 'totp' && health && !health.authSecret && (
+        {stage === 'signin' && health && !health.authSecret && (
           <p className="text-xs text-amber-600">Server is missing BETTER_AUTH_SECRET — sign-in will fail.</p>
         )}
-        {stage !== 'totp' && health === null && (
+        {stage === 'signin' && health === null && (
           <p className="text-xs text-amber-600">
-            Can&apos;t reach <code>/api</code> — the auth backend isn&apos;t running. Deployed: check Pages Functions. Locally:
-            use <code>npm run dev:cf</code>.
+            Can&apos;t reach <code>/api</code> — the auth backend isn&apos;t running. Deployed: check Pages Functions.
+            Locally: use <code>npm run dev:cf</code>.
           </p>
         )}
       </div>

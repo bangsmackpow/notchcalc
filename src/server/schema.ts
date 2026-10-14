@@ -35,4 +35,11 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 CREATE INDEX IF NOT EXISTS projects_user_idx ON projects(user_id);
 CREATE INDEX IF NOT EXISTS projects_public_idx ON projects(is_public);
+CREATE TABLE IF NOT EXISTS invites (
+  code TEXT PRIMARY KEY,
+  created_by TEXT NOT NULL,
+  used_by TEXT,
+  created_at INTEGER NOT NULL,
+  used_at INTEGER
+);
 `

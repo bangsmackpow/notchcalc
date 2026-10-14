@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { generate } from '../geometry/index.ts'
+import { generate, type JointKind } from '../geometry/index.ts'
 import { jointSpecFor, type Branch } from '../assembly/model.ts'
 import { useAssembly } from '../assembly/store.ts'
 import { buildTemplateDrawing } from '../lib/drawing.ts'
@@ -38,25 +38,27 @@ export function Assembly() {
   const headerLength = useAssembly((s) => s.headerLength)
   const branches = useAssembly((s) => s.branches)
   const selectedId = useAssembly((s) => s.selectedId)
-  const addBranch = useAssembly((s) => s.addBranch)
+  const addConnection = useAssembly((s) => s.addConnection)
   const updateBranch = useAssembly((s) => s.updateBranch)
   const removeBranch = useAssembly((s) => s.removeBranch)
   const select = useAssembly((s) => s.select)
   const setHeaderOD = useAssembly((s) => s.setHeaderOD)
   const setHeaderLength = useAssembly((s) => s.setHeaderLength)
 
+  const KIND_ICON: Record<JointKind, string> = { branch: 'notch', miter: 'elbow', hole: 'hole' }
+
   const items = useMemo(
     () =>
       branches.map((b, i) => {
         const spec = jointSpecFor(b, headerOD)
-        const t = generate(spec)[0]
-        const drawing = buildTemplateDrawing(t, {
+        const templates = generate(spec)
+        const drawing = buildTemplateDrawing(templates, {
           unit,
           showGrid: opts.grid,
           showRulers: opts.rulers,
           showTabs: opts.tabs,
           calibration: opts.cal,
-          title: `BRANCH NOTCH #${i + 1}`,
+          title: `${(b.kind ?? 'branch') === 'branch' ? 'BRANCH' : (b.kind ?? 'branch') === 'miter' ? 'MITER ELBOW' : 'THROUGH-BRANCH'} #${i + 1}`,
         })
         const pages = tile(drawing, PAPERS[paperId], { orientation })
         return { b, spec, drawing, pages }
@@ -95,17 +97,31 @@ export function Assembly() {
   return (
     <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
       <section className="space-y-3">
-        <Card title="Add branch">
+        <Card title="Add connection">
           <div className="flex flex-wrap gap-1">
             {QUICK.map(([label, inch]) => (
               <button
                 key={label}
-                onClick={() => addBranch(toMm(inch, 'in'))}
+                onClick={() => addConnection('branch', toMm(inch, 'in'))}
                 className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-100"
               >
                 {label}
               </button>
             ))}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={() => addConnection('miter', headerOD)}
+              className="flex-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-100"
+            >
+              + Miter elbow
+            </button>
+            <button
+              onClick={() => addConnection('hole', Math.round(headerOD * 0.5))}
+              className="flex-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-100"
+            >
+              + Header hole
+            </button>
           </div>
           <p className="mt-2 text-xs text-slate-400">Click to drop a tube on the header, then drag it along.</p>
         </Card>
@@ -130,7 +146,7 @@ export function Assembly() {
                     }`}
                   >
                     <button className="flex-1 text-left" onClick={() => select(b.id)}>
-                      #{i + 1} · {b.odMm.toFixed(1)} mm · {b.angleDeg}°
+                      #{i + 1} · {KIND_ICON[b.kind ?? 'branch']} · {b.odMm.toFixed(1)} mm · {b.angleDeg}°
                     </button>
                     <button
                       className="ml-2 text-slate-400 hover:text-red-600"
@@ -147,11 +163,27 @@ export function Assembly() {
         </Card>
 
         {selected && (
-          <Card title="Selected branch">
+          <Card title="Selected connection">
             <div className="space-y-3">
-              <LocalNum label="Branch OD" mm={selected.b.odMm} unit={unit} onChangeMm={(mm) => patch(selected.b, { odMm: mm })} />
+              <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1 text-xs">
+                {(['branch', 'miter', 'hole'] as JointKind[]).map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => patch(selected.b, { kind: k })}
+                    className={`rounded-md px-2 py-1 font-medium ${(selected.b.kind ?? 'branch') === k ? 'bg-white shadow-sm' : 'text-slate-500'}`}
+                  >
+                    {KIND_ICON[k]}
+                  </button>
+                ))}
+              </div>
+              <LocalNum
+                label={selected.b.kind === 'miter' ? 'Tube OD' : 'Branch OD'}
+                mm={selected.b.odMm}
+                unit={unit}
+                onChangeMm={(mm) => patch(selected.b, { odMm: mm })}
+              />
               <RangeRow
-                label="Angle to header"
+                label={selected.b.kind === 'miter' ? 'Angle between tubes (90° = elbow)' : 'Angle to header'}
                 value={selected.b.angleDeg}
                 min={5}
                 max={175}
@@ -174,20 +206,32 @@ export function Assembly() {
                 onChange={(v) => patch(selected.b, { posMm: v })}
                 suffix=" mm"
               />
-              <div className="grid grid-cols-2 gap-2">
-                <LocalNum
-                  label="Offset in plane"
-                  mm={selected.b.offsetInPlane}
-                  unit={unit}
-                  onChangeMm={(mm) => patch(selected.b, { offsetInPlane: mm })}
-                />
-                <LocalNum
-                  label="Offset perp"
-                  mm={selected.b.offsetPerp}
-                  unit={unit}
-                  onChangeMm={(mm) => patch(selected.b, { offsetPerp: mm })}
-                />
-              </div>
+              {selected.b.kind !== 'miter' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <LocalNum
+                    label="Offset in plane"
+                    mm={selected.b.offsetInPlane}
+                    unit={unit}
+                    onChangeMm={(mm) => patch(selected.b, { offsetInPlane: mm })}
+                  />
+                  <LocalNum
+                    label="Offset perp"
+                    mm={selected.b.offsetPerp}
+                    unit={unit}
+                    onChangeMm={(mm) => patch(selected.b, { offsetPerp: mm })}
+                  />
+                </div>
+              )}
+              {(selected.b.kind ?? 'branch') === 'branch' && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={!!selected.b.passThrough}
+                    onChange={(e) => patch(selected.b, { passThrough: e.target.checked })}
+                  />
+                  Pass-through branch (adds far-wall exit cut)
+                </label>
+              )}
             </div>
           </Card>
         )}

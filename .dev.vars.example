@@ -8,3 +8,12 @@ BETTER_AUTH_URL="http://localhost:8788"
 # http://localhost:8788/api/auth/callback/google (and your production URL).
 GOOGLE_CLIENT_ID=""
 GOOGLE_CLIENT_SECRET=""
+
+# Optional: real email verification via Resend (https://resend.com).
+# Without a key, sign-ups are auto-verified (dev/demo mode) and no email is sent.
+RESEND_API_KEY=""
+MAIL_FROM=""
+
+# Optional: "true" makes sign-ups require an invite code (copy one from the
+# account menu after signing in).
+INVITE_ONLY=""

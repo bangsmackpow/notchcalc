@@ -71,16 +71,23 @@ src/
   App.tsx          UI
 ```
 
-## Accounts, saving & sharing (Phase 3)
+## Accounts, saving & sharing (Phase 3+)
 
 - **Auth:** [BetterAuth](https://better-auth.com) on Cloudflare **D1** —
-  email/password + optional **Google** sign-in + optional **TOTP 2FA**.
+  email/password + optional **Google** sign-in + optional **TOTP 2FA** (QR code).
+- **Rate limiting:** enabled (database-backed) — tight limits on email
+  sign-in/sign-up endpoints.
+- **Email verification:** set `RESEND_API_KEY` (+ optional `MAIL_FROM`) and
+  sign-ups get a verification link; **without** the key, accounts are
+  auto-verified so dev/demo never dead-ends.
+- **Invite-only mode:** set `INVITE_ONLY=true` — sign-ups then need a code
+  (logged-in users copy invite links from the account menu; one account per code).
 - **Projects:** save/load single joints and 3D assemblies per user; toggle a
   project public to get a share link (`/?p=<id>`) that loads it read-only.
 - **Backend:** a single Pages Function (`functions/api/[[route]].ts`, Hono)
-  serving `/api/auth/*` (BetterAuth) and `/api/projects` (CRUD).
-  Auth tables are created automatically on first request; the `projects` table
-  is created by the same bootstrap.
+  serving `/api/auth/*` (BetterAuth), `/api/invites`, `/api/projects` (CRUD)
+  and `/api/health` diagnostics. Auth tables are created automatically on first
+  request; `projects` + `invites` by the same bootstrap.
 
 ### Local development (with auth)
 

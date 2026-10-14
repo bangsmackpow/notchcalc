@@ -17,9 +17,12 @@ export default function App() {
   const setUnit = useSettings((s) => s.setUnit)
   const [tab, setTab] = useState<Tab>('single')
 
-  // Shared project link: /?p=<id>
+  // Shared project link /?p=<id> and invite links /?invite=<code>
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('p')
+    const params = new URLSearchParams(window.location.search)
+    const inv = params.get('invite')
+    if (inv) useSettings.getState().setInvite(inv)
+    const id = params.get('p')
     if (!id) return
     api
       .getProject(id)

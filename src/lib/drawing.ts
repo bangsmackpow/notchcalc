@@ -1,4 +1,4 @@
-import type { CutProfile, Template, Unit } from '../geometry/types.ts'
+import type { CutProfile, Template, TemplateKind, Unit } from '../geometry/types.ts'
 import { fmtDimsLabel, fromMm, MM_PER_INCH } from './units.ts'
 
 export interface DPoint {
@@ -27,13 +27,13 @@ export interface Drawing {
   width: number
   height: number
   prims: Prim[]
-  /** wrap rectangle (all bands) in master coords, used by the tiler */
+  /** bounding box of all bands, used by the tiler */
   wrap: { x: number; y: number; w: number; h: number }
   /** filled "remove" regions (master coords) */
   removed: DPoint[][]
   /** solid cut boundaries exported to DXF */
   cutPaths: DPoint[][]
-  /** primary notch depth (first band), mm — for header readouts */
+  /** primary cut depth (first band), mm — for header readouts */
   depthMm: number
   meta: { title: string; subtitle: string; kind: string }
 }
@@ -48,7 +48,7 @@ export interface DrawingOptions {
 }
 
 const PAD = 8
-const BAND_SEP = 6
+const BAND_SEP = 10
 const TITLE_BAND = 34
 const RULER = 10
 const FOOTER = 16
@@ -63,12 +63,13 @@ const C = {
   text: '#111111',
 }
 
-/** A band is one developed profile stacked in the sheet. */
 interface Band {
+  kind: TemplateKind
   profile: CutProfile[]
   far?: CutProfile[]
   label: string
   hole: boolean
+  w: number
 }
 interface PlacedBand extends Band {
   top: number
@@ -76,38 +77,47 @@ interface PlacedBand extends Band {
   yBase: number
   max: number
   depth: number
+  x0: number
 }
 
-/** y grows downward; the shallowest cut (max) sits at the top of the band. */
 function mapProfile(profile: CutProfile[], x0: number, yBase: number, max: number): DPoint[] {
   return profile.map((p) => ({ x: x0 + p.arc, y: yBase + (max - p.cut) }))
 }
 
-function bandsFor(t: Template): Band[] {
-  if (t.kind === 'hole') return [{ profile: t.profile, far: t.far, label: 'HEADER HOLE', hole: true }]
+function bandsFor(t: Template, index: number, count: number, unit: Unit): Band[] {
+  const prefix = count > 1 ? `${index + 1}/${count} · ` : ''
+  const wrap = `  (WRAP ${fmtDimsLabel(t.width, unit)})`
+  if (t.kind === 'hole') return [{ kind: 'hole', profile: t.profile, far: t.far, label: prefix + 'HEADER HOLE', hole: true, w: t.width }]
   if (t.kind === 'branch' && t.far) {
     return [
-      { profile: t.profile, label: 'NEAR WALL (ENTRY SADDLE)', hole: false },
-      { profile: t.far, label: 'FAR WALL (EXIT CUT)', hole: false },
+      { kind: 'branch', profile: t.profile, label: `${prefix}NEAR WALL (ENTRY SADDLE)${count > 1 ? '' : wrap}`, hole: false, w: t.width },
+      { kind: 'branch', profile: t.far, label: `${prefix}FAR WALL (EXIT CUT)`, hole: false, w: t.width },
     ]
   }
-  return [{ profile: t.profile, label: '', hole: false }]
+  return [{ kind: t.kind, profile: t.profile, label: prefix + titleFor(t) + (count > 1 ? wrap : ''), hole: false, w: t.width }]
 }
 
-export function buildTemplateDrawing(t: Template, opts: DrawingOptions): Drawing {
+/**
+ * Render template(s) as one stacked drawing.
+ * Pass `generate(spec)` output — a through-branch yields notch + hole bands.
+ */
+export function buildTemplateDrawing(templates: Template | Template[], opts: DrawingOptions): Drawing {
+  const list = Array.isArray(templates) ? templates : [templates]
+  const t0 = list[0]
   const unit = opts.unit
   const showRulers = opts.showRulers ?? true
   const showGrid = opts.showGrid ?? true
   const showTabs = opts.showTabs ?? true
   const calibration = opts.calibration ?? true
 
-  const contentW = t.width
-  const masterW = Math.max(contentW, MIN_W)
-  const x0 = (masterW - contentW) / 2
+  const contentW = Math.max(...list.map((tt) => tt.width))
+  const uniformW = list.every((tt) => Math.abs(tt.width - t0.width) < 0.01)
+  const masterW = Math.max(contentW + (showTabs ? GLUE : 0) + 4, MIN_W)
+  const x0 = (masterW - (contentW + (showTabs ? GLUE : 0) + 4)) / 2
 
   // ---- stack bands ----
-  const raw = bandsFor(t)
-  let cursor = TITLE_BAND + (showRulers ? RULER : 0)
+  const raw = list.flatMap((tt, i) => bandsFor(tt, i, list.length, unit))
+  let cursor = TITLE_BAND + (showRulers && uniformW ? RULER : 0)
   const wrapTop = cursor
   const bands: PlacedBand[] = raw.map((b, i) => {
     const pts = b.far ? [...b.profile, ...b.far] : b.profile
@@ -125,36 +135,27 @@ export function buildTemplateDrawing(t: Template, opts: DrawingOptions): Drawing
     const height = depth + 2 * PAD
     const top = cursor
     cursor += height + (i < raw.length - 1 ? BAND_SEP : 0)
-    return { ...b, top, height, yBase: top + PAD, max: mx, depth }
+    return { ...b, top, height, yBase: top + PAD, max: mx, depth, x0: x0 + (contentW - b.w) / 2 }
   })
   const notchBottom = cursor
   const wrapH = notchBottom - wrapTop
 
-  const footerTop = notchBottom + (showRulers ? RULER : 0)
+  const footerTop = notchBottom + (showRulers && uniformW ? RULER : 0)
   const masterH = footerTop + FOOTER
 
   const prims: Prim[] = []
   const removed: DPoint[][] = []
   const cutPaths: DPoint[][] = []
 
-  // outer wrap outline
-  prims.push({
-    t: 'rect',
-    x: x0,
-    y: wrapTop,
-    w: contentW,
-    h: wrapH,
-    lw: 0.3,
-    c: C.faint,
-  })
-
-  // ---- per-band geometry ----
+  // ---- bands ----
   for (const band of bands) {
-    const profilePts = mapProfile(band.profile, x0, band.yBase, band.max)
+    prims.push({ t: 'rect', x: band.x0, y: band.top, w: band.w, h: band.height, lw: 0.3, c: C.faint })
+
+    const profilePts = mapProfile(band.profile, band.x0, band.yBase, band.max)
     cutPaths.push(profilePts)
 
     if (band.hole && band.far) {
-      const farPts = mapProfile(band.far, x0, band.yBase, band.max)
+      const farPts = mapProfile(band.far, band.x0, band.yBase, band.max)
       prims.push({ t: 'poly', pts: profilePts, w: 0.4, c: C.cut })
       prims.push({ t: 'poly', pts: farPts, w: 0.4, c: C.cut })
       const region = [...profilePts, ...farPts.slice().reverse()]
@@ -163,79 +164,63 @@ export function buildTemplateDrawing(t: Template, opts: DrawingOptions): Drawing
       cutPaths.push(farPts)
     } else {
       const waste: DPoint[] = [
-        { x: x0, y: band.yBase },
-        { x: x0 + contentW, y: band.yBase },
-        { x: x0 + contentW, y: profilePts[profilePts.length - 1].y },
+        { x: band.x0, y: band.yBase },
+        { x: band.x0 + band.w, y: band.yBase },
+        { x: band.x0 + band.w, y: profilePts[profilePts.length - 1].y },
         ...profilePts.slice().reverse(),
-        { x: x0, y: profilePts[0].y },
+        { x: band.x0, y: profilePts[0].y },
       ]
       removed.push(waste)
       prims.push({ t: 'poly', pts: waste, closed: true, fill: C.remove, c: C.remove, w: 0.2 })
       prims.push({ t: 'poly', pts: profilePts, w: 0.5, c: C.cut })
     }
 
-    if (band.label) {
-      prims.push({ t: 'text', x: x0 + 1, y: band.top + 3.5, s: band.label, size: 2.4, c: C.faint })
+    // grid
+    if (showGrid) {
+      const step = unit === 'in' ? MM_PER_INCH : 10
+      for (let d = step; d < band.w; d += step) {
+        prims.push({ t: 'line', a: { x: band.x0 + d, y: band.top }, b: { x: band.x0 + d, y: band.top + band.height }, w: 0.12, c: C.grid, dash: [1, 2] })
+      }
     }
-    // band separator
-    prims.push({
-      t: 'line',
-      a: { x: x0, y: band.top + band.height + BAND_SEP / 2 },
-      b: { x: x0 + contentW, y: band.top + band.height + BAND_SEP / 2 },
-      w: 0.15,
-      c: C.grid,
-      dash: [2, 2],
-    })
-  }
 
-  // ---- grid ----
-  if (showGrid) {
-    const step = unit === 'in' ? MM_PER_INCH : 10
-    for (let d = step; d < contentW; d += step) {
-      prims.push({ t: 'line', a: { x: x0 + d, y: wrapTop }, b: { x: x0 + d, y: notchBottom }, w: 0.12, c: C.grid, dash: [1, 2] })
+    // centerline + seams
+    const clx = band.x0 + band.w / 2
+    prims.push({ t: 'line', a: { x: clx, y: band.top - 2 }, b: { x: clx, y: band.top + band.height + 2 }, w: 0.3, c: C.cut, dash: [3, 2] })
+    for (const sx of [band.x0, band.x0 + band.w]) {
+      prims.push({ t: 'line', a: { x: sx, y: band.top }, b: { x: sx, y: band.top + band.height }, w: 0.3, c: C.cut })
+    }
+
+    // band label + datum labels
+    prims.push({ t: 'text', x: band.x0 + 1, y: band.top - 2, s: band.label, size: 2.6, c: C.faint, bold: true })
+    if (!uniformW || list.length > 1) {
+      prims.push({ t: 'text', x: clx, y: band.top + band.height + 5.5, s: 'CENTERLINE 180°', size: 2, anchor: 'middle', c: C.faint })
+      prims.push({ t: 'text', x: band.x0 + 1, y: band.top + band.height + 5.5, s: 'SEAM 0°', size: 2, c: C.faint })
+      prims.push({ t: 'text', x: band.x0 + band.w - 1, y: band.top + band.height + 5.5, s: 'SEAM 360°', size: 2, anchor: 'end', c: C.faint })
     }
   }
 
-  // ---- centerline ----
-  const clx = x0 + contentW / 2
-  prims.push({ t: 'line', a: { x: clx, y: wrapTop - 2 }, b: { x: clx, y: notchBottom + 2 }, w: 0.3, c: C.cut, dash: [3, 2] })
-
-  // ---- seam marks (arc 0 / 360) ----
-  for (const sx of [x0, x0 + contentW]) {
-    prims.push({ t: 'line', a: { x: sx, y: wrapTop - 2 }, b: { x: sx, y: notchBottom + 2 }, w: 0.3, c: C.cut })
-  }
-
-  // ---- rulers ----
-  if (showRulers) {
+  // ---- shared rulers (only when all bands share the wrap width) ----
+  if (showRulers && uniformW) {
     buildDegreeRuler(prims, x0, contentW, wrapTop - RULER)
     buildLengthRuler(prims, x0, contentW, notchBottom, unit)
+    const clx = x0 + contentW / 2
+    prims.push({ t: 'text', x: clx, y: wrapTop - 3.5, s: 'CENTERLINE 180°', size: 2.4, anchor: 'middle', c: C.faint })
+    prims.push({ t: 'text', x: x0 + 1, y: notchBottom + RULER + 5, s: 'SEAM 0° / 360°', size: 2, anchor: 'start', c: C.faint })
   }
 
-  // ---- datum labels ----
-  prims.push({ t: 'text', x: clx, y: wrapTop - 3.5, s: 'CENTERLINE 180°', size: 2.4, anchor: 'middle', c: C.faint })
-  prims.push({ t: 'text', x: x0 + 1, y: notchBottom + RULER + 5, s: 'SEAM 0° / 360°', size: 2, anchor: 'start', c: C.faint })
-
-  // ---- glue / overlap flap (real seam tab) ----
-  if (showTabs) {
+  // ---- glue / overlap flap ----
+  if (showTabs && uniformW) {
     prims.push({ t: 'line', a: { x: x0 + contentW, y: wrapTop }, b: { x: x0 + contentW, y: notchBottom }, w: 0.3, dash: [2, 1.5], c: C.faint })
     prims.push({ t: 'rect', x: x0 + contentW, y: wrapTop, w: GLUE, h: wrapH, lw: 0.3, c: C.faint })
-    prims.push({
-      t: 'text',
-      x: x0 + contentW + GLUE / 2,
-      y: (wrapTop + notchBottom) / 2,
-      s: 'GLUE FLAP',
-      size: 2.4,
-      anchor: 'middle',
-      c: C.faint,
-    })
+    prims.push({ t: 'text', x: x0 + contentW + GLUE / 2, y: (wrapTop + notchBottom) / 2, s: 'GLUE FLAP', size: 2.4, anchor: 'middle', c: C.faint })
   }
 
   // ---- title band ----
-  const title = opts.title ?? titleFor(t)
-  const subtitle = subtitleFor(t, unit)
+  const title = opts.title ?? (list.length > 1 ? 'THROUGH-BRANCH SET (NOTCH + HEADER HOLE)' : titleFor(t0))
+  const subtitle = subtitleFor(t0, unit)
   prims.push({ t: 'text', x: 2, y: 8, s: title, size: 5, bold: true, anchor: 'start', c: C.text })
   prims.push({ t: 'text', x: 2, y: 14.5, s: subtitle, size: 3, anchor: 'start', c: C.faint })
-  prims.push({ t: 'text', x: masterW - 2, y: 8, s: `WRAP ${fmtDimsLabel(t.width, unit)}`, size: 3, anchor: 'end', c: C.faint })
+  prims.push({ t: 'text', x: masterW - 2, y: 8, s: `WRAP ${fmtDimsLabel(t0.width, unit)}`, size: 3, anchor: 'end', c: C.faint })
   prims.push({ t: 'text', x: masterW - 2, y: 13, s: `DEPTH ${fmtDimsLabel(bands[0].depth, unit)}`, size: 3, anchor: 'end', c: C.faint })
 
   if (calibration) buildCalibration(prims, masterW - 106, 22)
@@ -269,7 +254,7 @@ export function buildTemplateDrawing(t: Template, opts: DrawingOptions): Drawing
     removed,
     cutPaths,
     depthMm: bands[0].depth,
-    meta: { title, subtitle, kind: t.kind },
+    meta: { title, subtitle, kind: t0.kind },
   }
 }
 

@@ -14,10 +14,12 @@ interface SettingsStore {
   paperId: string
   orientation: 'auto' | Orientation
   opts: TemplateOptions
+  invite: string
   setUnit: (u: Unit) => void
   setPaperId: (id: string) => void
   setOrientation: (o: 'auto' | Orientation) => void
   setOpt: <K extends keyof TemplateOptions>(k: K, v: boolean) => void
+  setInvite: (code: string) => void
 }
 
 export const useSettings = create<SettingsStore>((set) => ({
@@ -25,8 +27,10 @@ export const useSettings = create<SettingsStore>((set) => ({
   paperId: 'letter',
   orientation: 'auto',
   opts: { grid: true, rulers: true, tabs: true, cal: true },
+  invite: '',
   setUnit: (unit) => set({ unit }),
   setPaperId: (paperId) => set({ paperId }),
   setOrientation: (orientation) => set({ orientation }),
   setOpt: (k, v) => set((s) => ({ opts: { ...s.opts, [k]: v } })),
+  setInvite: (invite) => set({ invite }),
 }))

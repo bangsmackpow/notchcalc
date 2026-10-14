@@ -24,7 +24,7 @@ export interface JointSpec {
   passThrough: boolean
 }
 
-/** Turn a joint spec into the one or more templates needed to make the cut. */
+/** Turn a joint spec into the templates needed to make the cut. */
 export function generate(spec: JointSpec): Template[] {
   switch (spec.kind) {
     case 'branch':
@@ -41,7 +41,15 @@ export function generate(spec: JointSpec): Template[] {
     case 'miter':
       return [miterForJointAngle(spec.branchOD, spec.angleDeg)]
     case 'hole':
+      // A through-branch needs the saddle cut on the branch AND the hole in the header.
       return [
+        branchNotch({
+          branchOD: spec.branchOD,
+          headerOD: spec.headerOD,
+          angleDeg: spec.angleDeg,
+          offsetInPlane: spec.offsetInPlane,
+          offsetPerp: spec.offsetPerp,
+        }),
         headerHole({
           headerOD: spec.headerOD,
           branchOD: spec.branchOD,

@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest'
-import { branchNotch, headerHole } from '../geometry/index.ts'
+import { branchNotch, generate, headerHole } from '../geometry/index.ts'
 import { buildTemplateDrawing } from './drawing.ts'
+
+describe('generate + stacked drawing for through-branches', () => {
+  const templates = generate({
+    kind: 'hole',
+    branchOD: 50,
+    headerOD: 70,
+    angleDeg: 90,
+    offsetInPlane: 0,
+    offsetPerp: 0,
+    passThrough: false,
+  })
+
+  it('produces notch + hole templates', () => {
+    expect(templates.map((t) => t.kind)).toEqual(['branch', 'hole'])
+  })
+
+  it('stacks both templates: notch profile + both hole edges', () => {
+    const d = buildTemplateDrawing(templates, { unit: 'mm' })
+    expect(d.cutPaths).toHaveLength(3)
+    // notch band + hole band separated
+    expect(d.height).toBeGreaterThan(buildTemplateDrawing(templates[0], { unit: 'mm' }).height)
+    expect(d.meta.title).toContain('THROUGH-BRANCH SET')
+  })
+})
 
 describe('buildTemplateDrawing — band stacking', () => {
   const near = branchNotch({ branchOD: 50, headerOD: 70, angleDeg: 90 })

@@ -1,11 +1,13 @@
-import type { JointSpec } from '../geometry/index.ts'
+import type { JointKind, JointSpec } from '../geometry/index.ts'
 
 const DEG = Math.PI / 180
 
-/** A branch tube joined to the single header of an assembly. */
+/** A connection attached to the assembly's single header (or floating for miter). */
 export interface Branch {
   id: string
-  /** branch outside diameter, mm */
+  /** connection type; legacy records without this are 'branch' */
+  kind?: JointKind
+  /** branch/tube outside diameter, mm */
   odMm: number
   /** joint centre position along the header axis, mm (0 = header centre) */
   posMm: number
@@ -17,6 +19,8 @@ export interface Branch {
   offsetInPlane: number
   /** perpendicular offset (out of the header/branch plane), mm */
   offsetPerp: number
+  /** branch continues through the header (adds far-wall cut) */
+  passThrough?: boolean
 }
 
 export interface Assembly {
@@ -59,31 +63,47 @@ export function branchOrigin(b: Branch): Vec3 {
   ]
 }
 
-/** The cut spec this branch implies for the geometry engine. */
+/** The cut spec this connection implies for the geometry engine. */
 export function jointSpecFor(b: Branch, headerOD: number): JointSpec {
+  const kind = b.kind ?? 'branch'
   return {
-    kind: 'branch',
+    kind,
     branchOD: b.odMm,
-    headerOD,
+    headerOD: kind === 'miter' ? b.odMm : headerOD,
     angleDeg: b.angleDeg,
     offsetInPlane: b.offsetInPlane,
     offsetPerp: b.offsetPerp,
-    passThrough: false,
+    passThrough: kind === 'branch' ? !!b.passThrough : false,
   }
 }
 
-export function makeBranch(odMm: number, posMm: number, angleDeg = 90): Branch {
+export function makeBranch(odMm: number, posMm: number, kind: JointKind = 'branch', angleDeg = 90): Branch {
   return {
     id:
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2),
+    kind,
     odMm,
     posMm,
     angleDeg,
     rollDeg: 0,
     offsetInPlane: 0,
     offsetPerp: 0,
+    passThrough: false,
+  }
+}
+
+/** Two tube directions for a miter elbow at `b` (corner at posMm on the header line). */
+export function miterDirs(b: Branch): { dA: Vec3; dB: Vec3 } {
+  // Joint angle θ between centre lines ⇒ each tube deviates (90° − θ/2) from the line.
+  const h = (90 - b.angleDeg / 2) * DEG
+  const rho = b.rollDeg * DEG
+  const ch = Math.cos(h)
+  const sh = Math.sin(h)
+  return {
+    dA: [-ch, -sh * Math.cos(rho), -sh * Math.sin(rho)],
+    dB: [ch, -sh * Math.cos(rho), -sh * Math.sin(rho)],
   }
 }
 

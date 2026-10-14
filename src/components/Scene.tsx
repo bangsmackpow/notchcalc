@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
-import { branchDir, branchOrigin, type Branch } from '../assembly/model.ts'
+import { branchDir, branchOrigin, miterDirs, type Branch, type Vec3 } from '../assembly/model.ts'
 import { useAssembly } from '../assembly/store.ts'
 
 const UP = new THREE.Vector3(0, 1, 0)
@@ -25,12 +25,9 @@ function BranchTube({ b, selected }: { b: Branch; selected: boolean }) {
   const dragging = useRef(false)
   const [hovered, setHovered] = useState(false)
 
+  const kind = b.kind ?? 'branch'
   const len = Math.max(b.odMm * 3, 200)
-  const u = branchDir(b)
-  const origin = branchOrigin(b)
-  const dir = new THREE.Vector3(u[0], u[1], u[2]).normalize()
-  const position = new THREE.Vector3(origin[0], origin[1], origin[2]).addScaledVector(dir, len / 2)
-  const quaternion = new THREE.Quaternion().setFromUnitVectors(UP, dir)
+  const color = selected ? '#f97316' : hovered ? '#60a5fa' : '#3b82f6'
 
   const onDown = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
@@ -60,23 +57,72 @@ function BranchTube({ b, selected }: { b: Branch; selected: boolean }) {
     }
   }
 
-  const color = selected ? '#f97316' : hovered ? '#60a5fa' : '#3b82f6'
+  const handlers = {
+    onPointerDown: onDown,
+    onPointerUp: onUp,
+    onPointerMove: onMove,
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation()
+      setHovered(true)
+    },
+    onPointerOut: () => setHovered(false),
+  }
+
+  const r = b.odMm / 2
+  const mat = <meshStandardMaterial color={color} metalness={0.4} roughness={0.5} side={THREE.DoubleSide} />
+
+  if (kind === 'miter') {
+    // Two tubes meeting at an elbow corner on the header line.
+    const corner = new THREE.Vector3(b.posMm, 0, 0)
+    const { dA, dB } = miterDirs(b)
+    const halfTube = (d: Vec3) => {
+      const dir = new THREE.Vector3(d[0], d[1], d[2]).normalize()
+      return {
+        position: corner.clone().addScaledVector(dir, len / 2),
+        quaternion: new THREE.Quaternion().setFromUnitVectors(UP, dir),
+      }
+    }
+    const A = halfTube(dA)
+    const B = halfTube(dB)
+    return (
+      <group {...handlers}>
+        <mesh position={A.position} quaternion={A.quaternion}>
+          <cylinderGeometry args={[r, r, len, 32, 1, true]} />
+          {mat}
+        </mesh>
+        <mesh position={B.position} quaternion={B.quaternion}>
+          <cylinderGeometry args={[r, r, len, 32, 1, true]} />
+          {mat}
+        </mesh>
+        <mesh position={corner}>
+          <sphereGeometry args={[r * 1.04, 20, 14]} />
+          {mat}
+        </mesh>
+      </group>
+    )
+  }
+
+  const u = branchDir(b)
+  const origin = branchOrigin(b)
+  const dir = new THREE.Vector3(u[0], u[1], u[2]).normalize()
+  const position = new THREE.Vector3(origin[0], origin[1], origin[2]).addScaledVector(dir, len / 2)
+  const quaternion = new THREE.Quaternion().setFromUnitVectors(UP, dir)
+  const ringQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir)
+
   return (
-    <mesh
-      position={position}
-      quaternion={quaternion}
-      onPointerDown={onDown}
-      onPointerUp={onUp}
-      onPointerMove={onMove}
-      onPointerOver={(e) => {
-        e.stopPropagation()
-        setHovered(true)
-      }}
-      onPointerOut={() => setHovered(false)}
-    >
-      <cylinderGeometry args={[b.odMm / 2, b.odMm / 2, len, 32, 1, true]} />
-      <meshStandardMaterial color={color} metalness={0.4} roughness={0.5} side={THREE.DoubleSide} />
-    </mesh>
+    <group {...handlers}>
+      <mesh position={position} quaternion={quaternion}>
+        <cylinderGeometry args={[r, r, len, 32, 1, true]} />
+        {mat}
+      </mesh>
+      {kind === 'hole' && (
+        // Marks the oval where the branch pierces the header wall.
+        <mesh position={new THREE.Vector3(origin[0], origin[1], origin[2])} quaternion={ringQuat}>
+          <torusGeometry args={[r * 1.03, 1.6, 8, 48]} />
+          <meshStandardMaterial color="#ef4444" roughness={0.4} />
+        </mesh>
+      )}
+    </group>
   )
 }
 

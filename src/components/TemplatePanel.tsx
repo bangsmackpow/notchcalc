@@ -26,8 +26,7 @@ export function TemplatePanel({ spec, title, footer, compact }: TemplatePanelPro
   const [preview, setPreview] = useState(false)
 
   const { drawing, pages } = useMemo(() => {
-    const t = generate(spec)[0]
-    const d = buildTemplateDrawing(t, {
+    const d = buildTemplateDrawing(generate(spec), {
       unit,
       showGrid: opts.grid,
       showRulers: opts.rulers,

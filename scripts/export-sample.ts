@@ -18,8 +18,8 @@ const cases: [string, JointSpec][] = [
 
 mkdirSync('tmp', { recursive: true })
 for (const [name, spec] of cases) {
-  const t = generate(spec)[0]
-  const drawing = buildTemplateDrawing(t, { unit: 'in' })
+  const templates = generate(spec)
+  const drawing = buildTemplateDrawing(templates, { unit: 'in' })
   const pages = tile(drawing, PAPERS.letter, {})
   writeFileSync(`tmp/${name}.svg`, renderPreviewSVG(drawing))
   writeFileSync(`tmp/${name}.dxf`, buildDxf(drawing, 'in'))

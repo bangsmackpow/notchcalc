@@ -45,8 +45,9 @@ export function miterCut(p: MiterParams): Template {
 
 /**
  * Convenience for joining two equal-diameter tubes at `jointAngleDeg`
- * (the angle between their centre lines): each end is cut at half that angle.
+ * (the angle between their centre lines, 90° = elbow, 180° = straight).
+ * The bend deviation is 180° − θ, so each end is cut at 90° − θ/2.
  */
 export function miterForJointAngle(od: number, jointAngleDeg: number, samples?: number): Template {
-  return miterCut({ od, angleDeg: jointAngleDeg / 2, samples })
+  return miterCut({ od, angleDeg: 90 - jointAngleDeg / 2, samples })
 }
