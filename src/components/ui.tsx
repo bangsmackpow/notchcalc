@@ -205,3 +205,46 @@ export function LocalNum({
     </label>
   )
 }
+
+export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-semibold">{title}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700" aria-label="close">
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+export function TextInput({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (s: string) => void
+  type?: string
+  placeholder?: string
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs text-slate-500">{label}</span>
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm outline-none focus:border-slate-400"
+      />
+    </label>
+  )
+}

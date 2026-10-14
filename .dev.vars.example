@@ -1,0 +1,10 @@
+# Copy to `.dev.vars` for local `wrangler pages dev`.
+# Generate a secret with: openssl rand -base64 32
+BETTER_AUTH_SECRET="replace-me-with-a-long-random-string"
+BETTER_AUTH_URL="http://localhost:8788"
+
+# Optional: enable Google sign-in. Create OAuth credentials at
+# https://console.cloud.google.com/apis/credentials and set the redirect URI to
+# http://localhost:8788/api/auth/callback/google (and your production URL).
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""

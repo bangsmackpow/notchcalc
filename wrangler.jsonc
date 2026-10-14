@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "notchcalc",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "notchcalc",
+      "database_id": "9a857509-06e9-47e8-af04-1bde04613a25",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

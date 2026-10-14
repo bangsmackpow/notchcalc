@@ -64,15 +64,46 @@ src/
   App.tsx          UI
 ```
 
+## Accounts, saving & sharing (Phase 3)
+
+- **Auth:** [BetterAuth](https://better-auth.com) on Cloudflare **D1** —
+  email/password + optional **Google** sign-in + optional **TOTP 2FA**.
+- **Projects:** save/load single joints and 3D assemblies per user; toggle a
+  project public to get a share link (`/?p=<id>`) that loads it read-only.
+- **Backend:** a single Pages Function (`functions/api/[[route]].ts`, Hono)
+  serving `/api/auth/*` (BetterAuth) and `/api/projects` (CRUD).
+  Auth tables are created automatically on first request; the `projects` table
+  is created by the same bootstrap.
+
+### Local development (with auth)
+
+```bash
+cp .dev.vars.example .dev.vars   # then edit BETTER_AUTH_SECRET
+npm run dev:cf                   # build + wrangler pages dev dist
+```
+
+### Deploy to Cloudflare Pages
+
+1. Cloudflare dashboard → Workers & Pages → Create → Pages → **Connect to Git**
+   → pick this repo.
+   - Build command: `npm run build`
+   - Build output directory: `dist`
+   - Env var: `NODE_VERSION = 22`
+2. Bindings come from `wrangler.jsonc` (D1 `DB` → `notchcalc`).
+3. Add secrets (Settings → Environment variables, encrypted):
+   - `BETTER_AUTH_SECRET` — long random string (**required**)
+   - `BETTER_AUTH_URL` — your Pages URL (e.g. `https://notchcalc.pages.dev`)
+   - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — optional, for Google sign-in.
+     Redirect URI: `https://<your-domain>/api/auth/callback/google`.
+4. Open the site once — the schema self-provisions on the first `/api` request.
+
+CLI alternative: `npm run deploy` (after `wrangler login`).
+
 ## Roadmap
 
 - **Phase 1 (done):** engine + all joint types + tiled print/PDF/DXF/UI.
-- **Phase 2:** 3D drag-and-drop assembly editor (react-three-fiber), joint
-  auto-detection, assembly-wide export.
-- **Phase 3:** accounts (BetterAuth on Cloudflare D1 — email/password + Google
-  OAuth + optional TOTP MFA), saved projects, R2 assets.
-
-## Hosting
-
-Static SPA; deploy to **Cloudflare Pages** connected to this GitHub repo
-(autobuild on push). Phase 3 adds Pages Functions + D1 + R2.
+- **Phase 2 (done):** 3D drag-and-drop assembly editor + assembly-wide export.
+- **Phase 3 (done):** BetterAuth (email/password + Google + TOTP) on D1, saved
+  projects, share links.
+- **Next:** QR code for 2FA enrolment, R2-backed project thumbnails,
+  snap-to-angle handles in the 3D editor.

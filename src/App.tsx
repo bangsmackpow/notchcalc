@@ -1,7 +1,11 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import type { Unit } from './geometry/types.ts'
 import { useSettings } from './state/settings.ts'
+import { useJoint } from './state/joint.ts'
+import { useAssembly } from './assembly/store.ts'
+import { api } from './lib/api.ts'
 import { SingleJoint } from './components/SingleJoint.tsx'
+import { AccountMenu } from './components/AccountMenu.tsx'
 
 const Assembly = lazy(() => import('./components/Assembly.tsx').then((m) => ({ default: m.Assembly })))
 
@@ -11,6 +15,26 @@ export default function App() {
   const unit = useSettings((s) => s.unit)
   const setUnit = useSettings((s) => s.setUnit)
   const [tab, setTab] = useState<Tab>('single')
+
+  // Shared project link: /?p=<id>
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('p')
+    if (!id) return
+    api
+      .getProject(id)
+      .then(({ project }) => {
+        if (project.data.kind === 'single') {
+          useJoint.getState().loadSpec(project.data.spec)
+          setTab('single')
+        } else {
+          useAssembly.getState().load(project.data.assembly)
+          setTab('assembly')
+        }
+      })
+      .catch(() => {
+        /* ignore bad/private link */
+      })
+  }, [])
 
   return (
     <>
@@ -39,16 +63,19 @@ export default function App() {
                 ))}
               </nav>
             </div>
-            <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1 text-sm">
-              {(['in', 'mm'] as Unit[]).map((u) => (
-                <button
-                  key={u}
-                  onClick={() => setUnit(u)}
-                  className={`rounded-md px-3 py-1 font-medium ${unit === u ? 'bg-white shadow-sm' : 'text-slate-500'}`}
-                >
-                  {u === 'in' ? 'inch' : 'mm'}
-                </button>
-              ))}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1 text-sm">
+                {(['in', 'mm'] as Unit[]).map((u) => (
+                  <button
+                    key={u}
+                    onClick={() => setUnit(u)}
+                    className={`rounded-md px-3 py-1 font-medium ${unit === u ? 'bg-white shadow-sm' : 'text-slate-500'}`}
+                  >
+                    {u === 'in' ? 'inch' : 'mm'}
+                  </button>
+                ))}
+              </div>
+              <AccountMenu />
             </div>
           </div>
         </header>

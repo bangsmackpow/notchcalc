@@ -12,6 +12,7 @@ import { useSettings } from '../state/settings.ts'
 import { Scene } from './Scene.tsx'
 import { TemplatePanel } from './TemplatePanel.tsx'
 import { OutputControls } from './OutputControls.tsx'
+import { ProjectsPanel } from './ProjectsPanel.tsx'
 import { Btn, Card, LocalNum, RangeRow } from './ui.tsx'
 
 const QUICK: [string, number][] = [
@@ -177,6 +178,13 @@ export function Assembly() {
         )}
 
         <OutputControls />
+        <ProjectsPanel
+          kind="assembly"
+          buildPayload={() => ({ kind: 'assembly', assembly: { headerOD, headerLength, branches } })}
+          apply={(p) => {
+            if (p.kind === 'assembly') useAssembly.getState().load(p.assembly)
+          }}
+        />
       </section>
 
       <section className="space-y-3">
