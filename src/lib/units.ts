@@ -10,12 +10,6 @@ export function fromMm(mm: number, unit: Unit): number {
   return unit === 'in' ? mm / MM_PER_INCH : mm
 }
 
-/** Plain decimal string in the requested unit. */
-export function fmtLength(mm: number, unit: Unit, digits = 3): string {
-  const v = fromMm(mm, unit)
-  return unit === 'in' ? `${v.toFixed(digits)}"` : `${v.toFixed(digits)} mm`
-}
-
 /** Nearest 1/den fraction of an inch, reduced, e.g. 1.25 -> "1 1/4"". */
 export function inchFraction(inches: number, den = 16): string {
   const sign = inches < 0 ? '-' : ''
@@ -39,9 +33,4 @@ export function inchFraction(inches: number, den = 16): string {
 export function fmtDimsLabel(mm: number, unit: Unit): string {
   if (unit === 'in') return inchFraction(fromMm(mm, unit))
   return `${mm.toFixed(1)} mm`
-}
-
-const UNIT_LABEL: Record<Unit, string> = { in: 'in', mm: 'mm' }
-export function unitLabel(unit: Unit): string {
-  return UNIT_LABEL[unit]
 }

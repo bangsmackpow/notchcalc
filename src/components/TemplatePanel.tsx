@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { generate, type JointSpec } from '../geometry/index.ts'
 import { buildTemplateDrawing } from '../lib/drawing.ts'
@@ -9,6 +9,7 @@ import { buildDxf } from '../lib/dxf.ts'
 import { downloadBlob, downloadText } from '../lib/download.ts'
 import { fromMm } from '../lib/units.ts'
 import { useSettings } from '../state/settings.ts'
+import { PrintPreview } from './PrintPreview.tsx'
 
 export interface TemplatePanelProps {
   spec: JointSpec
@@ -22,6 +23,7 @@ export function TemplatePanel({ spec, title, footer, compact }: TemplatePanelPro
   const paperId = useSettings((s) => s.paperId)
   const orientation = useSettings((s) => s.orientation)
   const opts = useSettings((s) => s.opts)
+  const [preview, setPreview] = useState(false)
 
   const { drawing, pages } = useMemo(() => {
     const t = generate(spec)[0]
@@ -30,7 +32,6 @@ export function TemplatePanel({ spec, title, footer, compact }: TemplatePanelPro
       showGrid: opts.grid,
       showRulers: opts.rulers,
       showTabs: opts.tabs,
-      showAdjust: opts.adjust,
       calibration: opts.cal,
       title,
     })
@@ -52,10 +53,11 @@ export function TemplatePanel({ spec, title, footer, compact }: TemplatePanelPro
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm text-slate-500">
           wrap <b>{fromMm(drawing.wrap.w, unit).toFixed(2)}</b> · depth{' '}
-          <b>{fromMm(drawing.wrap.h - 16, unit).toFixed(2)}</b> {unit} · <b>{pages.length}</b> sheet
+          <b>{fromMm(drawing.depthMm, unit).toFixed(2)}</b> {unit} · <b>{pages.length}</b> sheet
           {pages.length === 1 ? '' : 's'} ({pages[0]?.orientation})
         </div>
         <div className="flex gap-2">
+          <Btn onClick={() => setPreview(true)}>Preview</Btn>
           <Btn onClick={() => printDrawing(drawing, pages)}>Print</Btn>
           <Btn onClick={exportPdf}>PDF</Btn>
           <Btn onClick={exportDxf}>DXF</Btn>
@@ -66,6 +68,13 @@ export function TemplatePanel({ spec, title, footer, compact }: TemplatePanelPro
         <img src={url} alt="template preview" className="w-full" />
       </div>
       {footer}
+      {preview && (
+        <PrintPreview
+          items={[{ drawing, pages }]}
+          onClose={() => setPreview(false)}
+          onPrint={() => printDrawing(drawing, pages)}
+        />
+      )}
     </div>
   )
 }

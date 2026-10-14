@@ -68,6 +68,25 @@ function plan(
   return { cols, rows, pageW, pageH }
 }
 
+/** One orientation that minimises total sheets across several drawings (single print job). */
+export function sharedOrientation(
+  dims: { w: number; h: number }[],
+  paper: Paper,
+  opts: TileOptions = {},
+): Orientation {
+  const margin = opts.margin ?? 8
+  const overlap = opts.overlap ?? 6
+  let p = 0
+  let l = 0
+  for (const d of dims) {
+    const pp = plan(d.w, d.h, paper, 'portrait', margin, overlap)
+    const ll = plan(d.w, d.h, paper, 'landscape', margin, overlap)
+    p += pp.cols * pp.rows
+    l += ll.cols * ll.rows
+  }
+  return p <= l ? 'portrait' : 'landscape'
+}
+
 export function tile(drawing: Drawing, paper: Paper, opts: TileOptions = {}): Page[] {
   const margin = opts.margin ?? 8
   const overlap = opts.overlap ?? 6

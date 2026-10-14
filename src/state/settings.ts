@@ -6,7 +6,6 @@ export interface TemplateOptions {
   grid: boolean
   rulers: boolean
   tabs: boolean
-  adjust: boolean
   cal: boolean
 }
 
@@ -25,7 +24,7 @@ export const useSettings = create<SettingsStore>((set) => ({
   unit: 'in',
   paperId: 'letter',
   orientation: 'auto',
-  opts: { grid: true, rulers: true, tabs: true, adjust: true, cal: true },
+  opts: { grid: true, rulers: true, tabs: true, cal: true },
   setUnit: (unit) => set({ unit }),
   setPaperId: (paperId) => set({ paperId }),
   setOrientation: (orientation) => set({ orientation }),

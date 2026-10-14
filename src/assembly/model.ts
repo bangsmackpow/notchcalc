@@ -87,10 +87,18 @@ export function makeBranch(odMm: number, posMm: number, angleDeg = 90): Branch {
   }
 }
 
-/** Suggest a position for a new branch so they don't stack on top of each other. */
-export function nextBranchPos(a: Assembly): number {
-  const n = a.branches.length
-  const span = a.headerLength * 0.7
-  if (n === 0) return 0
-  return Math.round((-span / 2 + (span * (n % 5)) / 4) * 10) / 10
+/** Evenly distribute branches across the usable header span, preserving order. */
+export function distribute(branches: Branch[], headerOD: number, headerLength: number): Branch[] {
+  const n = branches.length
+  if (n === 0) return branches
+  const half = headerLength / 2
+  const margin = headerOD * 0.75 + 20
+  const lo = -half + margin
+  const hi = half - margin
+  const span = Math.max(0, hi - lo)
+  const gap = n > 1 ? span / (n - 1) : 0
+  return branches.map((b, i) => {
+    const pos = n === 1 ? (lo + hi) / 2 : lo + gap * i
+    return { ...b, posMm: Math.round(pos * 10) / 10 }
+  })
 }

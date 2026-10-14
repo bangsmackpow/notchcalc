@@ -65,6 +65,8 @@ function cropMarks(page: Page): string {
 export interface PageRenderOptions {
   /** clipping id uniqueness */
   withMarks?: boolean
+  /** scale to container width instead of fixed mm (for on-screen previews) */
+  fit?: boolean
 }
 
 /** A single print sheet, exact size in mm, with the master clipped to it. */
@@ -74,12 +76,15 @@ export function renderPageSVG(drawing: Drawing, page: Page, opts: PageRenderOpti
   const tx = page.margin - page.offsetX
   const ty = page.margin - page.offsetY
   const marks = opts.withMarks === false ? '' : cropMarks(page)
+  const size = opts.fit
+    ? 'style="width:100%;height:auto;display:block"'
+    : `width="${n(page.pageW)}mm" height="${n(page.pageH)}mm"`
 
   // overlap hints: right edge / bottom edge when another tile continues
   const right = page.col < page.cols - 1
   const bottom = page.row < page.rows - 1
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${n(page.pageW)}mm" height="${n(page.pageH)}mm" viewBox="0 0 ${n(page.pageW)} ${n(page.pageH)}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" ${size} viewBox="0 0 ${n(page.pageW)} ${n(page.pageH)}">
   <defs><clipPath id="${id}"><rect x="${n(page.margin)}" y="${n(page.margin)}" width="${n(page.printableW)}" height="${n(page.printableH)}" /></clipPath></defs>
   <rect x="0" y="0" width="${n(page.pageW)}" height="${n(page.pageH)}" fill="#ffffff" />
   <g clip-path="url(#${id})">

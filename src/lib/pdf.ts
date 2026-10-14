@@ -19,9 +19,19 @@ const RED = rgb(0.75, 0, 0)
 
 /** Standard 14 fonts are WinAnsi; downgrade glyphs they cannot encode. */
 function sanitize(s: string): string {
-  const map: Record<string, string> = { '⚠': '(!)', '∥': '||', '⊥': 'T', '→': '->', '↓': 'v' }
+  const map: Record<string, string> = {
+    '⚠': '(!)',
+    '∥': '||',
+    '⊥': 'T',
+    '→': '->',
+    '↓': 'v',
+    '—': '-',
+    '–': '-',
+    '•': '-',
+    '↔': '<->',
+  }
   let out = ''
-  for (const ch of s.replace(/[⚠∥⊥→↓]/g, (c) => map[c] ?? c)) {
+  for (const ch of s.replace(/[⚠∥⊥→↓—–•↔]/g, (c) => map[c] ?? c)) {
     out += (ch.codePointAt(0) ?? 0) <= 0xff ? ch : '?'
   }
   return out

@@ -1,9 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { generate } from '../geometry/index.ts'
 import { jointSpecFor, type Branch } from '../assembly/model.ts'
 import { useAssembly } from '../assembly/store.ts'
 import { buildTemplateDrawing } from '../lib/drawing.ts'
-import { PAPERS, tile } from '../lib/layout.ts'
+import { PAPERS, sharedOrientation, tile } from '../lib/layout.ts'
 import { printDrawings } from '../lib/print.ts'
 import { buildDxfMany } from '../lib/dxf.ts'
 import { downloadBlob, downloadText } from '../lib/download.ts'
@@ -11,6 +11,7 @@ import { toMm } from '../lib/units.ts'
 import { useSettings } from '../state/settings.ts'
 import { Scene } from './Scene.tsx'
 import { TemplatePanel } from './TemplatePanel.tsx'
+import { PrintPreview } from './PrintPreview.tsx'
 import { OutputControls } from './OutputControls.tsx'
 import { ProjectsPanel } from './ProjectsPanel.tsx'
 import { Btn, Card, LocalNum, RangeRow } from './ui.tsx'
@@ -54,7 +55,6 @@ export function Assembly() {
           showGrid: opts.grid,
           showRulers: opts.rulers,
           showTabs: opts.tabs,
-          showAdjust: opts.adjust,
           calibration: opts.cal,
           title: `BRANCH NOTCH #${i + 1}`,
         })
@@ -66,13 +66,28 @@ export function Assembly() {
 
   const selected = items.find((it) => it.b.id === selectedId)
 
-  const printAll = () => printDrawings(items.map((it) => ({ drawing: it.drawing, pages: it.pages })))
+  // One shared orientation so a single print job uses one paper size.
+  const exportItems = useMemo(() => {
+    const paper = PAPERS[paperId]
+    const orient =
+      orientation === 'auto'
+        ? sharedOrientation(items.map((it) => ({ w: it.drawing.width, h: it.drawing.height })), paper)
+        : orientation
+    return items.map((it) => ({ drawing: it.drawing, pages: tile(it.drawing, paper, { orientation: orient }) }))
+  }, [items, paperId, orientation])
+
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const totalSheets = exportItems.reduce((n, it) => n + it.pages.length, 0)
+
+  const printAll = () => printDrawings(exportItems)
   const pdfAll = async () => {
     const { buildPdfMany } = await import('../lib/pdf.ts')
-    const bytes = await buildPdfMany(items.map((it) => ({ drawing: it.drawing, pages: it.pages })))
+    const bytes = await buildPdfMany(exportItems)
     downloadBlob('notchcalc-assembly.pdf', bytes as unknown as BlobPart, 'application/pdf')
   }
-  const dxfAll = () => downloadText('notchcalc-assembly.dxf', buildDxfMany(items.map((it) => it.drawing), unit), 'application/dxf')
+  const dxfAll = () =>
+    downloadText('notchcalc-assembly.dxf', buildDxfMany(exportItems.map((it) => it.drawing), unit), 'application/dxf')
+
 
   const patch = (b: Branch, p: Partial<Branch>) => updateBranch(b.id, p)
   const half = headerLength / 2
@@ -195,9 +210,13 @@ export function Assembly() {
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3">
           <span className="text-sm text-slate-500">
-            {branches.length} joint{branches.length === 1 ? '' : 's'}
+            {branches.length} joint{branches.length === 1 ? '' : 's'} · {totalSheets} sheet
+            {totalSheets === 1 ? '' : 's'}
           </span>
           <div className="flex gap-2">
+            <Btn onClick={() => setPreviewOpen(true)} disabled={!branches.length} variant="ghost">
+              Preview
+            </Btn>
             <Btn onClick={printAll} disabled={!branches.length}>
               Print all
             </Btn>
@@ -209,6 +228,10 @@ export function Assembly() {
             </Btn>
           </div>
         </div>
+
+        {previewOpen && (
+          <PrintPreview items={exportItems} onClose={() => setPreviewOpen(false)} onPrint={() => printAll()} />
+        )}
 
         {selected ? (
           <TemplatePanel spec={selected.spec} compact />

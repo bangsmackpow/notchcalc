@@ -35,8 +35,7 @@ export function OutputControls() {
         <div className="grid grid-cols-2 gap-1 text-sm">
           <Check label="Ruler grid" checked={opts.grid} onChange={(v) => setOpt('grid', v)} />
           <Check label="Degree ruler" checked={opts.rulers} onChange={(v) => setOpt('rulers', v)} />
-          <Check label="Glue tab" checked={opts.tabs} onChange={(v) => setOpt('tabs', v)} />
-          <Check label="Length adjust" checked={opts.adjust} onChange={(v) => setOpt('adjust', v)} />
+          <Check label="Glue flap" checked={opts.tabs} onChange={(v) => setOpt('tabs', v)} />
           <Check label="Calibration bar" checked={opts.cal} onChange={(v) => setOpt('cal', v)} />
         </div>
       </Card>

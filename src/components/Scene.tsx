@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
@@ -17,25 +17,20 @@ function HeaderTube({ od, length }: { od: number; length: number }) {
   )
 }
 
-function BranchTube({ b, headerOD, selected }: { b: Branch; headerOD: number; selected: boolean }) {
+function BranchTube({ b, selected }: { b: Branch; selected: boolean }) {
   const { camera, raycaster } = useThree()
   const update = useAssembly((s) => s.updateBranch)
   const select = useAssembly((s) => s.select)
   const headerLength = useAssembly((s) => s.headerLength)
   const dragging = useRef(false)
   const [hovered, setHovered] = useState(false)
-  void headerOD
 
   const len = Math.max(b.odMm * 3, 200)
   const u = branchDir(b)
   const origin = branchOrigin(b)
-
-  const { position, quaternion } = useMemo(() => {
-    const dir = new THREE.Vector3(u[0], u[1], u[2]).normalize()
-    const pos = new THREE.Vector3(origin[0], origin[1], origin[2]).addScaledVector(dir, len / 2)
-    const q = new THREE.Quaternion().setFromUnitVectors(UP, dir)
-    return { position: pos, quaternion: q }
-  }, [u, origin, len])
+  const dir = new THREE.Vector3(u[0], u[1], u[2]).normalize()
+  const position = new THREE.Vector3(origin[0], origin[1], origin[2]).addScaledVector(dir, len / 2)
+  const quaternion = new THREE.Quaternion().setFromUnitVectors(UP, dir)
 
   const onDown = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
@@ -99,15 +94,10 @@ function SceneContents() {
       <directionalLight position={[400, 800, 600]} intensity={1.4} />
       <directionalLight position={[-500, -300, -400]} intensity={0.5} />
       <gridHelper args={[headerLength * 1.4, 28, '#334155', '#1e293b']} position={[0, -headerOD, 0]} />
-      <group
-        onPointerMissed={() => select(null)}
-        onPointerDown={(e) => {
-          if (e.target === e.currentTarget) return
-        }}
-      >
+      <group onPointerMissed={() => select(null)}>
         <HeaderTube od={headerOD} length={headerLength} />
         {branches.map((b) => (
-          <BranchTube key={b.id} b={b} headerOD={headerOD} selected={b.id === selectedId} />
+          <BranchTube key={b.id} b={b} selected={b.id === selectedId} />
         ))}
       </group>
       <OrbitControls

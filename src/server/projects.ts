@@ -38,13 +38,14 @@ function summary(row: ProjectRow) {
   }
 }
 
-function full(row: ProjectRow) {
+function full(row: ProjectRow, isOwner: boolean) {
   return {
     id: row.id,
     name: row.name,
     kind: row.kind,
     data: JSON.parse(row.data),
     isPublic: !!row.is_public,
+    isOwner,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -84,11 +85,10 @@ projectRoutes.get('/projects/:id', async (c) => {
   const id = c.req.param('id')
   const row = await c.env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(id).first<ProjectRow>()
   if (!row) return c.json({ error: 'not found' }, 404)
-  if (!row.is_public) {
-    const u = await currentUser(c)
-    if (!u || u.id !== row.user_id) return c.json({ error: 'forbidden' }, 403)
-  }
-  return c.json({ project: full(row) })
+  const u = await currentUser(c)
+  const isOwner = !!u && u.id === row.user_id
+  if (!row.is_public && !isOwner) return c.json({ error: 'forbidden' }, 403)
+  return c.json({ project: full(row, isOwner) })
 })
 
 projectRoutes.put('/projects/:id', async (c) => {

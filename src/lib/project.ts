@@ -13,6 +13,7 @@ export interface ProjectRecord {
   kind: ProjectKind
   data: ProjectPayload
   isPublic: boolean
+  isOwner: boolean
   createdAt: number
   updatedAt: number
 }

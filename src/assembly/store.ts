@@ -1,11 +1,6 @@
 import { create } from 'zustand'
-import {
-  DEFAULT_ASSEMBLY,
-  makeBranch,
-  nextBranchPos,
-  type Assembly,
-  type Branch,
-} from './model.ts'
+import { DEFAULT_ASSEMBLY, distribute, makeBranch } from './model.ts'
+import type { Assembly, Branch } from './model.ts'
 
 interface AssemblyStore {
   headerOD: number
@@ -30,13 +25,12 @@ export const useAssembly = create<AssemblyStore>((set, get) => ({
   selectedId: null,
 
   addBranch: (odMm) => {
-    const a: Assembly = {
-      headerOD: get().headerOD,
-      headerLength: get().headerLength,
-      branches: get().branches,
-    }
-    const b = makeBranch(odMm, nextBranchPos(a))
-    set({ branches: [...get().branches, b], selectedId: b.id })
+    const b = makeBranch(odMm, 0)
+    const next = [...get().branches, b]
+    set({
+      branches: distribute(next, get().headerOD, get().headerLength),
+      selectedId: b.id,
+    })
   },
 
   updateBranch: (id, patch) =>
@@ -46,19 +40,25 @@ export const useAssembly = create<AssemblyStore>((set, get) => ({
 
   removeBranch: (id) =>
     set({
-      branches: get().branches.filter((b) => b.id !== id),
+      branches: distribute(
+        get().branches.filter((b) => b.id !== id),
+        get().headerOD,
+        get().headerLength,
+      ),
       selectedId: get().selectedId === id ? null : get().selectedId,
     }),
 
   select: (id) => set({ selectedId: id }),
 
-  setHeaderOD: (od) => set({ headerOD: clamp(od, 6, 400) }),
+  setHeaderOD: (od) => {
+    const headerOD = clamp(od, 6, 400)
+    set({ headerOD, branches: distribute(get().branches, headerOD, get().headerLength) })
+  },
 
-  setHeaderLength: (len) =>
-    set({
-      headerLength: clamp(len, 100, 6000),
-      branches: get().branches.map((b) => ({ ...b, posMm: clamp(b.posMm, -len / 2 + 10, len / 2 - 10) })),
-    }),
+  setHeaderLength: (len) => {
+    const headerLength = clamp(len, 100, 6000)
+    set({ headerLength, branches: distribute(get().branches, get().headerOD, headerLength) })
+  },
 
   load: (a) =>
     set({

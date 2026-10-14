@@ -39,15 +39,3 @@ export const useJoint = create<JointStore>((set) => ({
     }),
 }))
 
-export function currentSpec(): JointSpec {
-  const s = useJoint.getState()
-  return {
-    kind: s.kind,
-    branchOD: s.branchOD,
-    headerOD: s.headerOD,
-    angleDeg: s.angle,
-    offsetInPlane: s.off1,
-    offsetPerp: s.off2,
-    passThrough: s.passThrough,
-  }
-}

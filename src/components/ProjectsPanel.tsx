@@ -71,9 +71,10 @@ export function ProjectsPanel({
     try {
       const { project } = await api.getProject(id)
       apply(project.data)
-      setCurrentId(project.id)
+      // Editing a project you don't own would 403, so load it as a new save.
+      setCurrentId(project.isOwner ? project.id : null)
       setName(project.name)
-      setMsg('Loaded')
+      setMsg(project.isOwner ? 'Loaded' : 'Loaded (shared — saving makes a copy)')
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'load failed')
     }

@@ -1,4 +1,3 @@
-import type { Unit } from '../geometry/types.ts'
 import { toMm } from './units.ts'
 
 export type SizeGroup = 'tube' | 'pipe' | 'metric'
@@ -68,23 +67,4 @@ export const GROUP_LABEL: Record<SizeGroup, string> = {
   tube: 'Tube — outside diameter',
   pipe: 'Pipe — NPS (Sch 40 OD)',
   metric: 'Metric tube',
-}
-
-/** Which groups to show for a given display unit (metric still needs both plenty). */
-export function groupsForUnit(unit: Unit): SizeGroup[] {
-  return unit === 'in' ? ['tube', 'pipe', 'metric'] : ['metric', 'tube', 'pipe']
-}
-
-/** Nearest preset within `tolMm`, used to show a friendly nominal next to a custom OD. */
-export function nearestPreset(odMm: number, tolMm = 0.15): SizePreset | undefined {
-  let best: SizePreset | undefined
-  let bestDist = Infinity
-  for (const p of PRESETS) {
-    const d = Math.abs(p.odMm - odMm)
-    if (d < bestDist) {
-      bestDist = d
-      best = p
-    }
-  }
-  return bestDist <= tolMm ? best : undefined
 }
