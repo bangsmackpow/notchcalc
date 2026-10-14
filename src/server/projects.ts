@@ -3,7 +3,7 @@ import type { Context } from 'hono'
 import type { Env } from './env.ts'
 import type { Auth } from './auth.ts'
 
-type AppEnv = { Bindings: Env; Variables: { auth: Auth } }
+type AppEnv = { Bindings: Env; Variables: { auth: Auth | null } }
 type Ctx = Context<AppEnv>
 
 interface ProjectRow {
@@ -22,7 +22,9 @@ const MAX_DATA = 512 * 1024
 export const projectRoutes = new Hono<AppEnv>()
 
 async function currentUser(c: Ctx) {
-  const session = await c.get('auth').api.getSession({ headers: c.req.raw.headers })
+  const auth = c.get('auth')
+  if (!auth) return null
+  const session = await auth.api.getSession({ headers: c.req.raw.headers })
   return session?.user ?? null
 }
 

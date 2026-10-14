@@ -1,8 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { authClient } from '../lib/auth-client.ts'
 import { Btn, Modal, TextInput } from './ui.tsx'
 
 type Stage = 'signin' | 'signup' | 'totp'
+
+interface Health {
+  ok: boolean
+  db: boolean
+  authSecret: boolean
+  google: boolean
+  baseURL: string
+}
 
 export function AuthDialog({ onClose }: { onClose: () => void }) {
   const [stage, setStage] = useState<Stage>('signin')
@@ -12,6 +20,14 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [health, setHealth] = useState<Health | null>(null)
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then((r) => (r.ok ? (r.json() as Promise<Health>) : null))
+      .then(setHealth)
+      .catch(() => setHealth(null))
+  }, [])
 
   const run = async (fn: () => Promise<void>) => {
     setError('')
@@ -49,7 +65,13 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
   const google = () =>
     run(async () => {
       const res = await authClient.signIn.social({ provider: 'google', callbackURL: window.location.href })
-      if (res?.error) throw new Error(res.error.message ?? 'Google sign-in failed')
+      if (res?.error) {
+        const e = res.error as { message?: string; status?: number; statusText?: string }
+        console.error('google sign-in error', res.error)
+        throw new Error(
+          `${e.message ?? e.statusText ?? 'Google sign-in failed'}${e.status ? ` (HTTP ${e.status})` : ''}`,
+        )
+      }
     })
 
   const title = stage === 'signup' ? 'Create account' : stage === 'totp' ? 'Two-factor code' : 'Sign in'
@@ -88,7 +110,7 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
           </Btn>
         </div>
 
-        {stage !== 'totp' && (
+        {stage !== 'totp' && health?.google && (
           <>
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <div className="h-px flex-1 bg-slate-200" /> or <div className="h-px flex-1 bg-slate-200" />
@@ -97,6 +119,18 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
               Continue with Google
             </Btn>
           </>
+        )}
+        {stage !== 'totp' && health && !health.google && (
+          <p className="text-xs text-slate-400">Google sign-in is not configured on this deployment.</p>
+        )}
+        {stage !== 'totp' && health && !health.authSecret && (
+          <p className="text-xs text-amber-600">Server is missing BETTER_AUTH_SECRET — sign-in will fail.</p>
+        )}
+        {stage !== 'totp' && health === null && (
+          <p className="text-xs text-amber-600">
+            Can&apos;t reach <code>/api</code> — the auth backend isn&apos;t running. Deployed: check Pages Functions. Locally:
+            use <code>npm run dev:cf</code>.
+          </p>
         )}
       </div>
     </Modal>
