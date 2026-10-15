@@ -1,26 +1,43 @@
 # notchcalc
 
-Generate printable **pipe & tube notching templates** in the browser. Pick two
-pipes (or a pipe and an angle), and get a correct flat-pattern "fishmouth" wrap
+Generate printable **pipe & tube notching templates** in the browser. Build a
+joint (or a whole 3D assembly), and get correct flat-pattern "fishmouth" wraps
 you can print, cut out, wrap around the tube, and grind to — no notcher, no CAD.
 
-This is the tool behind the marketing: **any OD up to 4", any angle 5°–175°, any
-intersection**, tile-printed onto normal paper.
+**Any OD up to 4", any angle 5°–175°, any intersection**, tile-printed onto
+normal paper.
 
-## Features (Phase 1)
+## Features
 
-- **Joint types:** same-diameter notch, unequal-diameter notch, offset /
-  eccentric branch, straight miter / angle cut, header hole template.
-- **Continuous angle** 5°–175° (slider).
-- **Offsets:** in-plane and perpendicular (eccentric branches).
-- **Pass-through** branches (near + far wall).
-- **Units:** inch / mm toggle.
-- **Standard size picker** (tube OD, NPS Sch-40 pipe OD, metric) plus custom OD.
-- **Tiled printing** on Letter, Legal, A4, A3 with crop marks, overlap guides
-  and a per-sheet 100 mm calibration bar.
-- **Exports:** browser print, PDF (exact size), DXF 1:1 (CNC/plasma), SVG.
-- **Template extras:** ruler grid, degree/rotation ruler, centerline, glue tab,
-  micro length-adjust window, part labels.
+**Single joint**
+- Joint types: same-diameter notch, unequal-diameter notch, offset / eccentric
+  branch, straight miter / angle cut, and header hole (a through-branch emits
+  both the saddle and the hole as one stacked sheet).
+- Continuous angle 5°–175°; in-plane and perpendicular offsets; pass-through
+  branches (near + far wall).
+
+**3D assembly editor**
+- Drag tubes onto a header, drag them along it; connections can be **notch**,
+  **miter elbow**, or **header hole**; per-connection OD, angle, roll, offsets.
+- Live 3D preview (react-three-fiber) with a joint inspector, and
+  assembly-wide **Print all / PDF all / DXF all**.
+
+**Output**
+- Tiled printing on Letter, Legal, A4, A3 with crop marks, overlap guides, glue
+  flap and a per-sheet **100 mm calibration bar** (verify before cutting metal).
+- In-app **print preview** (scaled sheet grid + page count).
+- Exports: browser print, **PDF** (exact size, `pdf-lib`), **DXF 1:1**
+  (`LWPOLYLINE`, for CNC/plasma), **SVG**.
+
+**Input**
+- Inch / mm toggle; standard size presets (tube OD, NPS Sch-40 pipe OD, metric)
+  plus custom OD.
+
+**Accounts & projects**
+- Email/password + optional Google sign-in, optional TOTP 2FA (QR), email
+  verification, password reset, invite-only mode, rate limiting.
+- Save/load single joints and assemblies; make a project public to get a
+  read-only share link (`/?p=<id>`).
 
 ## Geometry
 
@@ -35,93 +52,139 @@ cut(φ) = [ −(d₁ + r·cosφ)·cosθ + √(R² − (d₂ + r·sinφ)²) ] / s
 - `d₁`, `d₂` — in-plane / perpendicular offsets.
 - A miter is the `R → ∞` (plane) case; the header hole is the same solve
   developed on the header surface.
+- **Miter convention:** the slider is the angle between the two tube axes, so
+  the cut is `90° − angle/2` (90° = elbow ⇒ 45° each end; 175° ⇒ nearly
+  straight). `miterForJointAngle` handles this.
+
+All lengths are **millimetres internally**; convert only at the UI boundary
+(`src/lib/units.ts`).
 
 ## Development
 
 ```bash
 npm install
-npm run dev        # local dev server
-npm test           # vitest (geometry + renderers)
-npm run typecheck  # tsc --noEmit
-npm run lint       # oxlint
-npm run build      # production build -> dist/
+npm run dev         # Vite dev server (UI only — no /api; see dev:cf)
+npm run dev:cf      # build + wrangler pages dev dist  (needs .dev.vars)
+npm test            # vitest
+npm run typecheck   # tsc for app + worker + scripts configs
+npm run lint        # oxlint
+npm run build       # tsc + vite build -> dist/
+npm run deploy      # wrangler pages deploy dist
 ```
 
-Generate sample PDF/DXF/SVG files into `tmp/` and check them:
+Generate real exports and inspect them (useful when touching geometry or
+renderers):
 
 ```bash
 npm run export:sample    # writes tmp/<case>.pdf|.dxf|.svg
-npm run export:verify    # reports page counts, DXF polyline vertex counts, etc.
+npm run export:verify    # page counts, DXF polyline vertex counts, sizes
 ```
+
+Auth and the database only exist under `dev:cf` (Pages Functions + a local D1);
+plain `npm run dev` has no `/api`.
 
 ### Project layout
 
 ```
 src/
-  geometry/        pure math + tests (mm throughout)
+  geometry/        pure math (mm) + tests: joint.ts, miter.ts, hole.ts, index.ts
   lib/
     units.ts       unit conversion + formatting
     sizes.ts       standard OD presets
-    drawing.ts     drawing primitives + template annotations
-    layout.ts      paper sizes + tiling
-    svg.ts         SVG preview + print sheets
+    drawing.ts     drawing primitives + template annotation + band stacking
+    layout.ts      paper sizes + tiling + shared orientation
+    svg.ts         SVG preview + per-sheet print rendering
     pdf.ts         exact-size PDF (pdf-lib)
     dxf.ts         DXF export (dxf-writer)
-    print.ts       browser print
-  App.tsx          UI
+    print.ts       browser print (tiled sheets)
+    project.ts     shared project payload types
+    api.ts         client API calls
+    auth-client.ts BetterAuth client
+  assembly/        assembly model + zustand store
+  state/           zustand stores (settings, single-joint)
+  components/      UI (Assembly, Scene, TemplatePanel, AuthDialog, …)
+  server/          server-only: auth.ts, projects.ts, invites, email.ts,
+                   schema.ts, env.ts   (excluded from the app tsconfig)
+functions/api/[[route]].ts   Cloudflare Pages Function (Hono)
+scripts/           export-sample / verify-exports (run via Node type-stripping)
+public/            _headers, _redirects, favicon
+wrangler.jsonc     Pages config + D1 binding
 ```
 
-## Accounts, saving & sharing (Phase 3+)
+## Accounts & backend
 
-- **Auth:** [BetterAuth](https://better-auth.com) on Cloudflare **D1** —
-  email/password + optional **Google** sign-in + optional **TOTP 2FA** (QR code).
-- **Rate limiting:** enabled (database-backed) — tight limits on email
-  sign-in/sign-up endpoints.
-- **Email verification:** set `RESEND_API_KEY` (+ optional `MAIL_FROM`) and
-  sign-ups get a verification link; **without** the key, accounts are
-  auto-verified so dev/demo never dead-ends.
-- **Password reset:** "Forgot password?" emails a 1-hour link (Resend) that
-  returns to the app (`/?token=…`) to set a new password; other sessions are
-  revoked. Works for Google-only accounts too (they gain a local password).
-  Every send is recorded in the `mail_log` table with the Resend status.
-- **Invite-only mode:** set `INVITE_ONLY=true` — sign-ups then need a code
-  (logged-in users copy invite links from the account menu; one account per code).
-- **Projects:** save/load single joints and 3D assemblies per user; toggle a
-  project public to get a share link (`/?p=<id>`) that loads it read-only.
-- **Backend:** a single Pages Function (`functions/api/[[route]].ts`, Hono)
-  serving `/api/auth/*` (BetterAuth), `/api/invites`, `/api/projects` (CRUD)
-  and `/api/health` diagnostics. Auth tables are created automatically on first
-  request; `projects` + `invites` by the same bootstrap.
+- **Auth:** [BetterAuth](https://better-auth.com) on Cloudflare **D1**.
+- **Rate limiting:** database-backed; tight rules on `/sign-in/email`,
+  `/sign-up/email`, `/request-password-reset`.
+- **Email:** Resend. Verification emails are sent on sign-up (`sendOnSignUp`);
+  password reset emails use a 1-hour token and revoke other sessions. Without
+  `RESEND_API_KEY`, accounts auto-verify (dev/demo) and no mail is sent.
+- **Delivery log:** every send is recorded in the `mail_log` table
+  (email, kind, ok, Resend status, error detail) — Pages Function logs are not
+  exposed via the observability API, so this is the diagnostic path.
+- **Invite-only:** `INVITE_ONLY=true` gates sign-ups behind one-time codes;
+  signed-in users copy invite links (`/?invite=<code>`) from the account menu.
+- **Backend:** one Pages Function (`functions/api/[[route]].ts`, Hono) serving
+  `/api/auth/*` (BetterAuth), `/api/projects` (CRUD), `/api/invites`, and
+  `/api/health` (config diagnostics).
+
+Tables are created automatically on the first `/api` request: BetterAuth's
+(`user`, `session`, `account`, `verification`, `twoFactor`, `rateLimit`) plus
+app tables `projects`, `invites`, `mail_log`.
 
 ### Local development (with auth)
 
 ```bash
-cp .dev.vars.example .dev.vars   # then edit BETTER_AUTH_SECRET
-npm run dev:cf                   # build + wrangler pages dev dist
+cp .dev.vars.example .dev.vars   # then set BETTER_AUTH_SECRET
+npm run dev:cf
 ```
 
-### Deploy to Cloudflare Pages
+## Configuration
 
-1. Cloudflare dashboard → Workers & Pages → Create → Pages → **Connect to Git**
-   → pick this repo.
-   - Build command: `npm run build`
-   - Build output directory: `dist`
-   - Env var: `NODE_VERSION = 22`
-2. Bindings come from `wrangler.jsonc` (D1 `DB` → `notchcalc`).
-3. Add secrets (Settings → Environment variables, encrypted):
-   - `BETTER_AUTH_SECRET` — long random string (**required**)
-   - `BETTER_AUTH_URL` — your Pages URL (e.g. `https://notchcalc.pages.dev`)
-   - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — optional, for Google sign-in.
-     Redirect URI: `https://<your-domain>/api/auth/callback/google`.
-4. Open the site once — the schema self-provisions on the first `/api` request.
+| Variable | Required | Purpose |
+|---|---|---|
+| `BETTER_AUTH_SECRET` | **yes** | signs sessions/tokens; auth fails without it |
+| `BETTER_AUTH_URL` | recommended | canonical origin (trailing slashes are stripped) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | optional | Google sign-in |
+| `RESEND_API_KEY` | optional | enables verification + password-reset emails |
+| `MAIL_FROM` | optional | From header for Resend (verified domain) |
+| `INVITE_ONLY` | optional | `"true"` = invite-only sign-ups |
+| `NODE_VERSION` | build | `22` on Cloudflare Pages |
 
-CLI alternative: `npm run deploy` (after `wrangler login`).
+## Deploy to Cloudflare Pages
+
+1. Dashboard → Workers & Pages → Create → Pages → **Connect to Git** → pick the
+   repo. Build command `npm run build`, output `dist`, env `NODE_VERSION=22`.
+2. Bindings come from `wrangler.jsonc` (D1 `DB` → `notchcalc`,
+   `9a857509-06e9-47e8-af04-1bde04613a25`).
+3. Add the variables above under Settings → Environment variables (secrets
+   encrypted). **Env changes need a redeploy** to reach the Functions.
+4. Open the site once so the schema self-provisions.
+5. Check `https://<domain>/api/health` — it reports which config is present.
+
+CI (`.github/workflows/ci.yml`) runs typecheck + lint + test + build on push/PR;
+Pages rebuilds on every push to `main`.
+
+## Known limitations
+
+- **Google sign-ins are not challenged for TOTP** — BetterAuth only challenges
+  email/username sign-in paths, so 2FA protects password logins; a Google
+  account relies on Google's own 2FA.
+- **Email verification is soft:** unverified users can still sign in (a banner
+  nudges them) and the projects API does not require verification.
+- **Invite-only applies to email sign-ups**; Google sign-up bypasses it.
+- **CSP is Report-Only** (`public/_headers`) — flip to `Content-Security-Policy`
+  once the reports look clean.
+- The assembly is one header plus connections (notch / elbow / hole) — not a
+  general free-form tube graph.
+- Print at **100% / actual size** (never "fit to page"). A multi-document print
+  uses one shared orientation, so every sheet matches the `@page` size.
 
 ## Roadmap
 
-- **Phase 1 (done):** engine + all joint types + tiled print/PDF/DXF/UI.
-- **Phase 2 (done):** 3D drag-and-drop assembly editor + assembly-wide export.
-- **Phase 3 (done):** BetterAuth (email/password + Google + TOTP) on D1, saved
-  projects, share links.
-- **Next:** QR code for 2FA enrolment, R2-backed project thumbnails,
-  snap-to-angle handles in the 3D editor.
+- **Done:** geometry engine + all joint types; 3D assembly editor; tiled
+  print/PDF/DXF/SVG + preview; accounts (email/Google/2FA/verification/reset/
+  invites/rate limiting); projects + share links; CI.
+- **Next:** enforce 2FA for social sign-ins (custom hook or endpoint gating);
+  hard email verification; R2-backed project thumbnails; snap-to-angle handles
+  and duplicate-branch in the editor; multi-header assemblies.

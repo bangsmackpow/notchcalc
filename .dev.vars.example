@@ -9,8 +9,10 @@ BETTER_AUTH_URL="http://localhost:8788"
 GOOGLE_CLIENT_ID=""
 GOOGLE_CLIENT_SECRET=""
 
-# Optional: real email verification via Resend (https://resend.com).
-# Without a key, sign-ups are auto-verified (dev/demo mode) and no email is sent.
+# Optional: transactional email via Resend (https://resend.com) — used for
+# sign-up verification and password reset. Without a key, sign-ups are
+# auto-verified (dev/demo) and no email is sent. MAIL_FROM should be an address
+# on a domain verified in Resend.
 RESEND_API_KEY=""
 MAIL_FROM=""
 
