@@ -3,7 +3,7 @@ import { authClient } from '../lib/auth-client.ts'
 import { useSettings } from '../state/settings.ts'
 import { Btn, Modal, TextInput } from './ui.tsx'
 
-type Stage = 'signin' | 'signup' | 'totp' | 'sent'
+type Stage = 'signin' | 'signup' | 'totp' | 'sent' | 'forgot' | 'forgotSent'
 
 interface Health {
   ok: boolean
@@ -83,6 +83,10 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
         const res = await authClient.twoFactor.verifyTotp({ code })
         if (res.error) throw new Error(res.error.message)
         onClose()
+      } else if (stage === 'forgot') {
+        const res = await authClient.requestPasswordReset({ email, redirectTo: window.location.origin })
+        if (res.error) throw new Error(res.error.message)
+        setStage('forgotSent')
       }
     })
 
@@ -102,22 +106,57 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
       }
     })
 
-  const title = stage === 'signup' ? 'Create account' : stage === 'totp' ? 'Two-factor code' : stage === 'sent' ? 'Confirm your email' : 'Sign in'
+  const title =
+    stage === 'signup'
+      ? 'Create account'
+      : stage === 'totp'
+        ? 'Two-factor code'
+        : stage === 'sent'
+          ? 'Confirm your email'
+          : stage === 'forgot'
+            ? 'Reset password'
+            : stage === 'forgotSent'
+              ? 'Check your email'
+              : 'Sign in'
+
+  const backToSignIn = () => {
+    setError('')
+    setStage('signin')
+  }
 
   return (
     <Modal title={title} onClose={onClose}>
       <div className="space-y-3">
-        {stage === 'totp' ? (
+        {stage === 'totp' && (
           <>
             <p className="text-sm text-slate-500">Enter the 6-digit code from your authenticator app.</p>
             <TextInput label="Code" value={code} onChange={setCode} placeholder="123456" />
           </>
-        ) : stage === 'sent' ? (
+        )}
+
+        {stage === 'sent' && (
           <p className="text-sm text-slate-600">
-            We sent a verification link to <b>{email}</b>. Open it on this device to finish — you can close this
-            window afterwards.
+            We sent a verification link to <b>{email}</b>. Open it on this device to finish — you can close this window
+            afterwards.
           </p>
-        ) : (
+        )}
+
+        {stage === 'forgot' && (
+          <>
+            <p className="text-sm text-slate-500">
+              Enter your email and we&apos;ll send a link to choose a new password.
+            </p>
+            <TextInput label="Email" value={email} onChange={setEmail} type="email" placeholder="you@example.com" />
+          </>
+        )}
+
+        {stage === 'forgotSent' && (
+          <p className="text-sm text-slate-600">
+            If an account exists for <b>{email}</b>, a reset link is on its way. The link expires in 1 hour.
+          </p>
+        )}
+
+        {(stage === 'signin' || stage === 'signup') && (
           <>
             {stage === 'signup' && <TextInput label="Name" value={name} onChange={setName} placeholder="Your name" />}
             <TextInput label="Email" value={email} onChange={setEmail} type="email" placeholder="you@example.com" />
@@ -125,35 +164,46 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
             {stage === 'signup' && (health?.inviteOnly || invite) && (
               <TextInput label="Invite code" value={inviteCode} onChange={setInviteCode} placeholder="from an invite link" />
             )}
+            {stage === 'signin' && (
+              <button className="text-sm text-slate-500 hover:text-slate-800" onClick={() => setStage('forgot')}>
+                Forgot password?
+              </button>
+            )}
           </>
         )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        {stage !== 'sent' && (
+        {(stage === 'signin' || stage === 'signup' || stage === 'totp' || stage === 'forgot') && (
           <div className="flex items-center justify-between pt-1">
             {stage !== 'totp' ? (
               <button
                 className="text-sm text-slate-500 hover:text-slate-800"
                 onClick={() => {
                   setError('')
-                  setStage(stage === 'signup' ? 'signin' : 'signup')
+                  setStage(stage === 'signup' ? 'signin' : stage === 'forgot' ? 'signin' : 'signup')
                 }}
               >
-                {stage === 'signup' ? 'Have an account? Sign in' : 'No account? Sign up'}
+                {stage === 'signup' ? 'Have an account? Sign in' : stage === 'forgot' ? 'Back to sign in' : 'No account? Sign up'}
               </button>
             ) : (
               <span />
             )}
             <Btn onClick={submit} disabled={busy}>
-              {busy ? '…' : stage === 'signup' ? 'Create' : stage === 'totp' ? 'Verify' : 'Sign in'}
+              {busy ? '…' : stage === 'signup' ? 'Create' : stage === 'totp' ? 'Verify' : stage === 'forgot' ? 'Send link' : 'Sign in'}
             </Btn>
           </div>
         )}
-        {stage === 'sent' && (
-          <div className="flex justify-end">
-            <Btn onClick={resend} disabled={busy} variant="ghost">
-              Resend email
+
+        {(stage === 'sent' || stage === 'forgotSent') && (
+          <div className="flex justify-end gap-2">
+            {stage === 'sent' && (
+              <Btn onClick={resend} disabled={busy} variant="ghost">
+                Resend email
+              </Btn>
+            )}
+            <Btn onClick={backToSignIn} variant="ghost">
+              Back to sign in
             </Btn>
           </div>
         )}

@@ -21,7 +21,22 @@ export function createAuth(env: Env, origin: string) {
     baseURL: base,
     secret: env.BETTER_AUTH_SECRET,
     database: env.DB,
-    emailAndPassword: { enabled: true, minPasswordLength: 8 },
+    emailAndPassword: {
+      enabled: true,
+      minPasswordLength: 8,
+      resetPasswordTokenExpiresIn: 3600,
+      // Invalidate other sessions after a successful reset.
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user, url }) => {
+        await sendEmail(env, {
+          to: user.email,
+          kind: 'reset',
+          subject: 'Reset your notchcalc password',
+          text: `Reset your notchcalc password (link expires in 1 hour): ${url}`,
+          html: `<p>We received a request to reset your <b>notchcalc</b> password.</p><p><a href="${url}">Choose a new password</a></p><p>This link expires in 1 hour. If you didn't request it, you can ignore this email.</p>`,
+        })
+      },
+    },
     socialProviders,
     // allowPasswordless: Google-only accounts have no local password, so the
     // password step is dropped for them (still required for email accounts).
@@ -35,6 +50,7 @@ export function createAuth(env: Env, origin: string) {
       customRules: {
         '/sign-in/email': { window: 60, max: 8 },
         '/sign-up/email': { window: 3600, max: 12 },
+        '/forget-password': { window: 3600, max: 5 },
       },
     },
     emailVerification: {

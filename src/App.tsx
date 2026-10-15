@@ -7,6 +7,7 @@ import { useAssembly } from './assembly/store.ts'
 import { api } from './lib/api.ts'
 import { SingleJoint } from './components/SingleJoint.tsx'
 import { AccountMenu } from './components/AccountMenu.tsx'
+import { ResetPasswordDialog } from './components/ResetPassword.tsx'
 
 const Assembly = lazy(() => import('./components/Assembly.tsx').then((m) => ({ default: m.Assembly })))
 
@@ -16,12 +17,25 @@ export default function App() {
   const unit = useSettings((s) => s.unit)
   const setUnit = useSettings((s) => s.setUnit)
   const [tab, setTab] = useState<Tab>('single')
+  const [reset, setReset] = useState<{ token?: string; invalid?: boolean } | null>(null)
 
-  // Shared project link /?p=<id> and invite links /?invite=<code>
+  // Shared project link /?p=<id>, invite links /?invite=<code>, reset /?token=…
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const inv = params.get('invite')
     if (inv) useSettings.getState().setInvite(inv)
+
+    // Password reset: BetterAuth redirects here with ?token=… (or ?error=INVALID_TOKEN).
+    const token = params.get('token')
+    const err = params.get('error')
+    if (token || err) {
+      setReset({ token: token ?? undefined, invalid: !!err })
+      params.delete('token')
+      params.delete('error')
+      const qs = params.toString()
+      window.history.replaceState({}, '', qs ? `/?${qs}` : '/')
+    }
+
     const id = params.get('p')
     if (!id) return
     api
@@ -94,6 +108,9 @@ export default function App() {
           )}
         </main>
       </div>
+      {reset && (
+        <ResetPasswordDialog token={reset.token} invalid={reset.invalid} onClose={() => setReset(null)} />
+      )}
       {createPortal(<div id="print-area" />, document.body)}
     </>
   )
