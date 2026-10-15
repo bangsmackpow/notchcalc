@@ -50,7 +50,7 @@ export function createAuth(env: Env, origin: string) {
       customRules: {
         '/sign-in/email': { window: 60, max: 8 },
         '/sign-up/email': { window: 3600, max: 12 },
-        '/forget-password': { window: 3600, max: 5 },
+        '/request-password-reset': { window: 3600, max: 5 },
       },
     },
     emailVerification: {

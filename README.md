@@ -80,6 +80,10 @@ src/
 - **Email verification:** set `RESEND_API_KEY` (+ optional `MAIL_FROM`) and
   sign-ups get a verification link; **without** the key, accounts are
   auto-verified so dev/demo never dead-ends.
+- **Password reset:** "Forgot password?" emails a 1-hour link (Resend) that
+  returns to the app (`/?token=…`) to set a new password; other sessions are
+  revoked. Works for Google-only accounts too (they gain a local password).
+  Every send is recorded in the `mail_log` table with the Resend status.
 - **Invite-only mode:** set `INVITE_ONLY=true` — sign-ups then need a code
   (logged-in users copy invite links from the account menu; one account per code).
 - **Projects:** save/load single joints and 3D assemblies per user; toggle a
