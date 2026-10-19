@@ -38,6 +38,21 @@ export interface TemplateMeta {
   passThrough?: boolean
   /** true when part of the branch surface never reaches the header (clamped) */
   clipped?: boolean
+  /** section shapes, for labels: 'round' | 'rect' */
+  branchSection?: string
+  headerSection?: string
+  section?: string
+  /** section sizes (mm) for labels: [primary, secondary for rect] */
+  branchSize?: number
+  branchSize2?: number
+  headerSize?: number
+  headerSize2?: number
+  /** twist of a section about its axis, degrees */
+  sectionRollDeg?: number
+  headerRollDeg?: number
+  rollDeg?: number
+  /** true when a square section was approximated by a circle (header hole) */
+  approx?: boolean
   [key: string]: string | number | boolean | undefined
 }
 

@@ -269,14 +269,33 @@ function titleFor(t: Template): string {
   }
 }
 
+function sectionLabel(
+  name: string,
+  shape: string | number | boolean | undefined,
+  a: number | undefined,
+  b: number | undefined,
+  unit: Unit,
+): string | null {
+  if (typeof shape !== 'string' || a == null) return null
+  if (shape === 'round') return `${name} Ø${fmtDimsLabel(a, unit)}`
+  return `${name} □${fmtDimsLabel(a, unit)}×${fmtDimsLabel(b ?? a, unit)}`
+}
+
 function subtitleFor(t: Template, unit: Unit): string {
   const m = t.meta
   const parts: string[] = []
-  if (m.branchOD) parts.push(`branch OD ${fmtDimsLabel(m.branchOD, unit)}`)
-  if (m.headerOD) parts.push(`header OD ${fmtDimsLabel(m.headerOD, unit)}`)
+  const isMiter = t.kind === 'miter'
+  const branch = sectionLabel(isMiter ? 'tube' : 'branch', m.branchSection, m.branchSize, m.branchSize2, unit)
+  const header = sectionLabel('header', m.headerSection, m.headerSize, m.headerSize2, unit)
+  if (branch) parts.push(branch)
+  if (header) parts.push(header)
+  if (!branch && m.branchOD) parts.push(`branch OD ${fmtDimsLabel(m.branchOD, unit)}`)
+  if (!header && m.headerOD) parts.push(`header OD ${fmtDimsLabel(m.headerOD, unit)}`)
   if (m.angleDeg != null) parts.push(`angle ${m.angleDeg}°`)
   if (m.offsetInPlane) parts.push(`offset ∥ ${fmtDimsLabel(m.offsetInPlane, unit)}`)
   if (m.offsetPerp) parts.push(`offset ⊥ ${fmtDimsLabel(m.offsetPerp, unit)}`)
+  if (m.sectionRollDeg) parts.push(`roll ${m.sectionRollDeg}°`)
+  if (m.approx) parts.push('⚠ approx hole')
   if (m.clipped) parts.push('⚠ clamped')
   return parts.join('   ·   ')
 }

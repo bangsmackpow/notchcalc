@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { branchNotch } from '../geometry/index.ts'
+import { branchNotch, type Section } from '../geometry/index.ts'
 import { buildTemplateDrawing } from './drawing.ts'
+
+const R = (od: number): Section => ({ shape: 'round', od })
 import { PAPERS, tile } from './layout.ts'
 import { buildPdf } from './pdf.ts'
 import { buildDxf } from './dxf.ts'
@@ -8,7 +10,7 @@ import { renderPreviewSVG, renderPrintHTML } from './svg.ts'
 import { toMm } from './units.ts'
 
 // 4" OD tube on a 4" tube at 90° — the largest common case.
-const t = branchNotch({ branchOD: toMm(4, 'in'), headerOD: toMm(4, 'in'), angleDeg: 90 })
+const t = branchNotch({ branchSection: R(toMm(4, 'in')), headerSection: R(toMm(4, 'in')), angleDeg: 90 })
 const drawing = buildTemplateDrawing(t, { unit: 'in' })
 
 describe('layout / tiling', () => {
@@ -18,7 +20,7 @@ describe('layout / tiling', () => {
   })
   it('a small wrap fits one Letter sheet', () => {
     const small = buildTemplateDrawing(
-      branchNotch({ branchOD: toMm(1, 'in'), headerOD: toMm(1, 'in'), angleDeg: 90 }),
+      branchNotch({ branchSection: R(toMm(1, 'in')), headerSection: R(toMm(1, 'in')), angleDeg: 90 }),
       { unit: 'in' },
     )
     expect(tile(small, PAPERS.letter)).toHaveLength(1)

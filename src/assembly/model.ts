@@ -1,4 +1,4 @@
-import type { JointKind, JointSpec } from '../geometry/index.ts'
+import { sectionDims, toSection, type JointKind, type JointSpec, type Section } from '../geometry/index.ts'
 
 const DEG = Math.PI / 180
 
@@ -7,8 +7,8 @@ export interface Branch {
   id: string
   /** connection type; legacy records without this are 'branch' */
   kind?: JointKind
-  /** branch/tube outside diameter, mm */
-  odMm: number
+  /** branch/tube cross-section */
+  section: Section
   /** joint centre position along the header axis, mm (0 = header centre) */
   posMm: number
   /** angle between branch and header centre lines, degrees */
@@ -19,18 +19,20 @@ export interface Branch {
   offsetInPlane: number
   /** perpendicular offset (out of the header/branch plane), mm */
   offsetPerp: number
+  /** twist of the branch section about its own axis, degrees */
+  sectionRollDeg?: number
   /** branch continues through the header (adds far-wall cut) */
   passThrough?: boolean
 }
 
 export interface Assembly {
-  headerOD: number
+  headerSection: Section
   headerLength: number
   branches: Branch[]
 }
 
 export const DEFAULT_ASSEMBLY: Assembly = {
-  headerOD: 60.325, // 2-3/8" NPS
+  headerSection: { shape: 'round', od: 60.325 }, // 2-3/8" NPS
   headerLength: 1200,
   branches: [],
 }
@@ -64,32 +66,35 @@ export function branchOrigin(b: Branch): Vec3 {
 }
 
 /** The cut spec this connection implies for the geometry engine. */
-export function jointSpecFor(b: Branch, headerOD: number): JointSpec {
+export function jointSpecFor(b: Branch, headerSection: Section): JointSpec {
   const kind = b.kind ?? 'branch'
   return {
     kind,
-    branchOD: b.odMm,
-    headerOD: kind === 'miter' ? b.odMm : headerOD,
+    branchSection: b.section,
+    headerSection: kind === 'miter' ? b.section : headerSection,
     angleDeg: b.angleDeg,
     offsetInPlane: b.offsetInPlane,
     offsetPerp: b.offsetPerp,
+    sectionRollDeg: b.sectionRollDeg ?? 0,
+    headerRollDeg: 0,
     passThrough: kind === 'branch' ? !!b.passThrough : false,
   }
 }
 
-export function makeBranch(odMm: number, posMm: number, kind: JointKind = 'branch', angleDeg = 90): Branch {
+export function makeBranch(section: Section, posMm: number, kind: JointKind = 'branch', angleDeg = 90): Branch {
   return {
     id:
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2),
     kind,
-    odMm,
+    section,
     posMm,
     angleDeg,
     rollDeg: 0,
     offsetInPlane: 0,
     offsetPerp: 0,
+    sectionRollDeg: 0,
     passThrough: false,
   }
 }
@@ -107,12 +112,39 @@ export function miterDirs(b: Branch): { dA: Vec3; dB: Vec3 } {
   }
 }
 
+/** Coerce persisted/legacy assembly data (old `headerOD`/`odMm`) into sections. */
+export function migrateAssembly(input: unknown): Assembly {
+  const a = (input ?? {}) as Record<string, unknown>
+  const branches = Array.isArray(a.branches) ? a.branches : []
+  return {
+    headerSection: toSection(a.headerSection ?? a.headerOD),
+    headerLength: typeof a.headerLength === 'number' ? a.headerLength : DEFAULT_ASSEMBLY.headerLength,
+    branches: branches.map((raw) => {
+      const b = (raw ?? {}) as Record<string, unknown>
+      return {
+        id: typeof b.id === 'string' ? b.id : Math.random().toString(36).slice(2),
+        kind: (typeof b.kind === 'string' ? b.kind : 'branch') as JointKind,
+        section: toSection(b.section ?? b.odMm),
+        posMm: typeof b.posMm === 'number' ? b.posMm : 0,
+        angleDeg: typeof b.angleDeg === 'number' ? b.angleDeg : 90,
+        rollDeg: typeof b.rollDeg === 'number' ? b.rollDeg : 0,
+        offsetInPlane: typeof b.offsetInPlane === 'number' ? b.offsetInPlane : 0,
+        offsetPerp: typeof b.offsetPerp === 'number' ? b.offsetPerp : 0,
+        sectionRollDeg: typeof b.sectionRollDeg === 'number' ? b.sectionRollDeg : 0,
+        passThrough: !!b.passThrough,
+      }
+    }),
+  }
+}
+
 /** Evenly distribute branches across the usable header span, preserving order. */
-export function distribute(branches: Branch[], headerOD: number, headerLength: number): Branch[] {
+export function distribute(branches: Branch[], headerSection: Section, headerLength: number): Branch[] {
   const n = branches.length
   if (n === 0) return branches
+  const dims = sectionDims(headerSection)
+  const headerSize = Math.max(dims.w, dims.h)
   const half = headerLength / 2
-  const margin = headerOD * 0.75 + 20
+  const margin = headerSize * 0.75 + 20
   const lo = -half + margin
   const hi = half - margin
   const span = Math.max(0, hi - lo)

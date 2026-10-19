@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { generate, type JointKind } from '../geometry/index.ts'
+import { generate, sectionDims, type JointKind, type Section } from '../geometry/index.ts'
 import { jointSpecFor, type Branch } from '../assembly/model.ts'
 import { useAssembly } from '../assembly/store.ts'
 import { buildTemplateDrawing } from '../lib/drawing.ts'
@@ -14,6 +14,7 @@ import { TemplatePanel } from './TemplatePanel.tsx'
 import { PrintPreview } from './PrintPreview.tsx'
 import { OutputControls } from './OutputControls.tsx'
 import { ProjectsPanel } from './ProjectsPanel.tsx'
+import { SectionEditor } from './SectionEditor.tsx'
 import { Btn, Card, LocalNum, RangeRow } from './ui.tsx'
 
 const QUICK: [string, number][] = [
@@ -28,13 +29,29 @@ const QUICK: [string, number][] = [
   ['4"', 4],
 ]
 
+function scaleSection(s: Section, f: number): Section {
+  return s.shape === 'round'
+    ? { shape: 'round', od: Math.max(3, s.od * f) }
+    : {
+        shape: 'rect',
+        width: Math.max(3, s.width * f),
+        height: Math.max(3, s.height * f),
+        cornerRadius: s.cornerRadius * f,
+      }
+}
+
+function secLabel(s: Section): string {
+  const d = sectionDims(s)
+  return d.shape === 'round' ? `Ø${d.w.toFixed(1)}` : `${d.w.toFixed(1)}×${d.h.toFixed(1)}`
+}
+
 export function Assembly() {
   const unit = useSettings((s) => s.unit)
   const paperId = useSettings((s) => s.paperId)
   const orientation = useSettings((s) => s.orientation)
   const opts = useSettings((s) => s.opts)
 
-  const headerOD = useAssembly((s) => s.headerOD)
+  const headerSection = useAssembly((s) => s.headerSection)
   const headerLength = useAssembly((s) => s.headerLength)
   const branches = useAssembly((s) => s.branches)
   const selectedId = useAssembly((s) => s.selectedId)
@@ -42,7 +59,7 @@ export function Assembly() {
   const updateBranch = useAssembly((s) => s.updateBranch)
   const removeBranch = useAssembly((s) => s.removeBranch)
   const select = useAssembly((s) => s.select)
-  const setHeaderOD = useAssembly((s) => s.setHeaderOD)
+  const setHeaderSection = useAssembly((s) => s.setHeaderSection)
   const setHeaderLength = useAssembly((s) => s.setHeaderLength)
 
   const KIND_ICON: Record<JointKind, string> = { branch: 'notch', miter: 'elbow', hole: 'hole' }
@@ -50,7 +67,7 @@ export function Assembly() {
   const items = useMemo(
     () =>
       branches.map((b, i) => {
-        const spec = jointSpecFor(b, headerOD)
+        const spec = jointSpecFor(b, headerSection)
         const templates = generate(spec)
         const drawing = buildTemplateDrawing(templates, {
           unit,
@@ -63,7 +80,7 @@ export function Assembly() {
         const pages = tile(drawing, PAPERS[paperId], { orientation })
         return { b, spec, drawing, pages }
       }),
-    [branches, headerOD, unit, paperId, orientation, opts],
+    [branches, headerSection, unit, paperId, orientation, opts],
   )
 
   const selected = items.find((it) => it.b.id === selectedId)
@@ -90,7 +107,6 @@ export function Assembly() {
   const dxfAll = () =>
     downloadText('notchcalc-assembly.dxf', buildDxfMany(exportItems.map((it) => it.drawing), unit), 'application/dxf')
 
-
   const patch = (b: Branch, p: Partial<Branch>) => updateBranch(b.id, p)
   const half = headerLength / 2
 
@@ -102,7 +118,7 @@ export function Assembly() {
             {QUICK.map(([label, inch]) => (
               <button
                 key={label}
-                onClick={() => addConnection('branch', toMm(inch, 'in'))}
+                onClick={() => addConnection('branch', { shape: 'round', od: toMm(inch, 'in') })}
                 className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-100"
               >
                 {label}
@@ -111,13 +127,13 @@ export function Assembly() {
           </div>
           <div className="mt-2 flex gap-2">
             <button
-              onClick={() => addConnection('miter', headerOD)}
+              onClick={() => addConnection('miter', headerSection)}
               className="flex-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-100"
             >
               + Miter elbow
             </button>
             <button
-              onClick={() => addConnection('hole', Math.round(headerOD * 0.5))}
+              onClick={() => addConnection('hole', scaleSection(headerSection, 0.5))}
               className="flex-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium hover:bg-slate-100"
             >
               + Header hole
@@ -126,12 +142,13 @@ export function Assembly() {
           <p className="mt-2 text-xs text-slate-400">Click to drop a tube on the header, then drag it along.</p>
         </Card>
 
-        <Card title="Header">
-          <div className="grid grid-cols-2 gap-2">
-            <LocalNum label="Outside diameter" mm={headerOD} unit={unit} onChangeMm={setHeaderOD} />
-            <LocalNum label="Length" mm={headerLength} unit={unit} step={1} onChangeMm={setHeaderLength} />
-          </div>
-        </Card>
+        <SectionEditor
+          title="Header"
+          section={headerSection}
+          onChange={setHeaderSection}
+          unit={unit}
+          extra={<LocalNum label="Length" mm={headerLength} unit={unit} step={1} onChangeMm={setHeaderLength} />}
+        />
 
         <Card title={`Branches (${branches.length})`}>
           {branches.length === 0 ? (
@@ -146,7 +163,7 @@ export function Assembly() {
                     }`}
                   >
                     <button className="flex-1 text-left" onClick={() => select(b.id)}>
-                      #{i + 1} · {KIND_ICON[b.kind ?? 'branch']} · {b.odMm.toFixed(1)} mm · {b.angleDeg}°
+                      #{i + 1} · {KIND_ICON[b.kind ?? 'branch']} · {secLabel(b.section)} mm · {b.angleDeg}°
                     </button>
                     <button
                       className="ml-2 text-slate-400 hover:text-red-600"
@@ -176,11 +193,13 @@ export function Assembly() {
                   </button>
                 ))}
               </div>
-              <LocalNum
-                label={selected.b.kind === 'miter' ? 'Tube OD' : 'Branch OD'}
-                mm={selected.b.odMm}
+              <SectionEditor
+                title={selected.b.kind === 'miter' ? 'Tube' : 'Branch'}
+                section={selected.b.section}
+                onChange={(s) => patch(selected.b, { section: s })}
                 unit={unit}
-                onChangeMm={(mm) => patch(selected.b, { odMm: mm })}
+                roll={selected.b.sectionRollDeg ?? 0}
+                onRollChange={(v) => patch(selected.b, { sectionRollDeg: v })}
               />
               <RangeRow
                 label={selected.b.kind === 'miter' ? 'Angle between tubes (90° = elbow)' : 'Angle to header'}
@@ -239,7 +258,7 @@ export function Assembly() {
         <OutputControls />
         <ProjectsPanel
           kind="assembly"
-          buildPayload={() => ({ kind: 'assembly', assembly: { headerOD, headerLength, branches } })}
+          buildPayload={() => ({ kind: 'assembly', assembly: { headerSection, headerLength, branches } })}
           apply={(p) => {
             if (p.kind === 'assembly') useAssembly.getState().load(p.assembly)
           }}

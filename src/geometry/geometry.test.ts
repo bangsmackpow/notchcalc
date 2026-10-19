@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { branchNotch, generate, headerHole, miterCut, miterForJointAngle } from './index.ts'
+import { branchNotch, generate, headerHole, miterCut, miterForJointAngle, type JointSpec, type Section } from './index.ts'
 
 const TAU = Math.PI * 2
 const N = 720
+const R = (od: number): Section => ({ shape: 'round', od })
 
 describe('branchNotch — equal diameter, square tee', () => {
   // r = R = 1 (OD 2 both), θ = 90° → cut(φ) = r·|cosφ|
-  const t = branchNotch({ branchOD: 2, headerOD: 2, angleDeg: 90, samples: N })
+  const t = branchNotch({ branchSection: R(2), headerSection: R(2), angleDeg: 90, samples: N })
 
   it('wraps the full circumference', () => {
     expect(t.width).toBeCloseTo(TAU, 10)
@@ -37,7 +38,7 @@ describe('branchNotch — equal diameter, square tee', () => {
 
 describe('branchNotch — unequal diameter', () => {
   // r = 0.5, R = 1, θ = 90° → cut = √(R² − r²sin²φ)
-  const t = branchNotch({ branchOD: 1, headerOD: 2, angleDeg: 90, samples: N })
+  const t = branchNotch({ branchSection: R(1), headerSection: R(2), angleDeg: 90, samples: N })
   it('matches the closed form √(R² − r²sin²φ)', () => {
     const n = t.profile.length - 1
     for (let i = 0; i <= n; i += 13) {
@@ -48,8 +49,8 @@ describe('branchNotch — unequal diameter', () => {
 })
 
 describe('branchNotch — angled joint', () => {
-  const sq = branchNotch({ branchOD: 2, headerOD: 2, angleDeg: 90, samples: N })
-  const swept = branchNotch({ branchOD: 2, headerOD: 2, angleDeg: 45, samples: N })
+  const sq = branchNotch({ branchSection: R(2), headerSection: R(2), angleDeg: 90, samples: N })
+  const swept = branchNotch({ branchSection: R(2), headerSection: R(2), angleDeg: 45, samples: N })
 
   it('45° produces a longer cut than 90°', () => {
     expect(swept.depth).toBeGreaterThan(sq.depth)
@@ -68,22 +69,53 @@ describe('branchNotch — angled joint', () => {
 
 describe('branchNotch — offsets', () => {
   it('perpendicular offset breaks the symmetry of the profile', () => {
-    const t = branchNotch({ branchOD: 2, headerOD: 3, angleDeg: 90, offsetPerp: 0.25, samples: N })
+    const t = branchNotch({ branchSection: R(2), headerSection: R(3), angleDeg: 90, offsetPerp: 0.25, samples: N })
     const n = t.profile.length - 1
     expect(t.profile[n / 4].cut).not.toBeCloseTo(t.profile[(3 * n) / 4].cut, 3)
   })
 })
 
 describe('branchNotch — pass-through', () => {
-  const t = branchNotch({ branchOD: 2, headerOD: 2, angleDeg: 90, passThrough: true, samples: N })
+  const t = branchNotch({ branchSection: R(2), headerSection: R(2), angleDeg: 90, passThrough: true, samples: N })
   it('reports a far curve with the opposite sign', () => {
     expect(t.far).toBeDefined()
     expect(t.far![0].cut).toBeCloseTo(-t.profile[0].cut, 9)
   })
 })
 
+describe('branchNotch — square branch on round header', () => {
+  // A sharp square (10 mm) on a 16 mm round header, square tee.
+  // The flat façade facing the header mid-flat sits at x = 5; cut = √(R² − y²).
+  const t = branchNotch({
+    branchSection: { shape: 'rect', width: 10, height: 10, cornerRadius: 0 },
+    headerSection: R(16),
+    angleDeg: 90,
+    samples: N,
+  })
+  const R8 = 8
+
+  it('widths the wrap at the square perimeter', () => {
+    expect(t.width).toBeCloseTo(40, 9)
+  })
+
+  it('mid-flat cut = √(R² − y²) with y the half-offset', () => {
+    // datum (arc 0) is the middle of a flat at y = −5
+    expect(t.profile[0].cut).toBeCloseTo(Math.sqrt(R8 * R8 - 25), 6)
+  })
+
+  it('is clipped when a corner overhangs a small header', () => {
+    const small = branchNotch({
+      branchSection: { shape: 'rect', width: 40, height: 40, cornerRadius: 0 },
+      headerSection: R(16),
+      angleDeg: 90,
+      samples: N,
+    })
+    expect(small.meta.clipped).toBe(true)
+  })
+})
+
 describe('miterCut', () => {
-  const t = miterCut({ od: 2, angleDeg: 45, samples: N })
+  const t = miterCut({ section: R(2), angleDeg: 45, samples: N })
   it('has amplitude r·tan(α)', () => {
     const amp = 1 * Math.tan(Math.PI / 4)
     expect(t.profile[0].cut).toBeCloseTo(amp, 9)
@@ -93,13 +125,13 @@ describe('miterCut', () => {
     expect(t.minCut).toBeCloseTo(-amp, 9)
   })
   it('a 90° elbow joint equals a 45° cut each end', () => {
-    const a = miterForJointAngle(2, 90, N)
-    const b = miterCut({ od: 2, angleDeg: 45, samples: N })
+    const a = miterForJointAngle(R(2), 90, N)
+    const b = miterCut({ section: R(2), angleDeg: 45, samples: N })
     expect(a.depth).toBeCloseTo(b.depth, 10)
   })
   it('joint angle convention: cut = 90° − joint/2', () => {
-    const a = miterForJointAngle(2, 170, N)
-    const b = miterCut({ od: 2, angleDeg: 5, samples: N })
+    const a = miterForJointAngle(R(2), 170, N)
+    const b = miterCut({ section: R(2), angleDeg: 5, samples: N })
     expect(a.depth).toBeCloseTo(b.depth, 10)
   })
 })
@@ -122,14 +154,16 @@ describe('headerHole — equal diameter, square tee', () => {
 })
 
 describe('generate() dispatch', () => {
-  const base = {
-    branchOD: 2,
-    headerOD: 3,
+  const base: Omit<JointSpec, 'kind'> = {
+    branchSection: R(2),
+    headerSection: R(3),
     angleDeg: 90,
     offsetInPlane: 0,
     offsetPerp: 0,
+    sectionRollDeg: 0,
+    headerRollDeg: 0,
     passThrough: false,
-  } as const
+  }
 
   it('branch → one branch template', () => {
     const out = generate({ ...base, kind: 'branch' })

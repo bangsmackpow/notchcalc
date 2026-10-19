@@ -1,38 +1,47 @@
 import { useMemo } from 'react'
-import type { JointKind, JointSpec } from '../geometry/index.ts'
+import { isRound, type JointKind, type JointSpec, type Section } from '../geometry/index.ts'
 import { useJoint } from '../state/joint.ts'
 import { useSettings } from '../state/settings.ts'
 import { Card, LocalNum, RangeRow } from './ui.tsx'
-import { PresetPick } from './PresetPick.tsx'
+import { SectionEditor } from './SectionEditor.tsx'
 import { TemplatePanel } from './TemplatePanel.tsx'
 import { OutputControls } from './OutputControls.tsx'
 import { ProjectsPanel } from './ProjectsPanel.tsx'
 
+function sectionValid(s: Section): boolean {
+  return s.shape === 'round' ? s.od > 0.5 : s.width > 0.5 && s.height > 0.5
+}
+
 export function SingleJoint() {
   const unit = useSettings((s) => s.unit)
   const kind = useJoint((s) => s.kind)
-  const branchOD = useJoint((s) => s.branchOD)
-  const headerOD = useJoint((s) => s.headerOD)
+  const branchSection = useJoint((s) => s.branchSection)
+  const headerSection = useJoint((s) => s.headerSection)
   const off1 = useJoint((s) => s.off1)
   const off2 = useJoint((s) => s.off2)
   const angle = useJoint((s) => s.angle)
+  const sectionRoll = useJoint((s) => s.sectionRoll)
+  const headerRoll = useJoint((s) => s.headerRoll)
   const passThrough = useJoint((s) => s.passThrough)
   const setKind = useJoint((s) => s.setKind)
   const set = useJoint((s) => s.set)
 
-  const valid = branchOD > 0.5 && (kind === 'miter' || headerOD > 0.5)
+  const valid = sectionValid(branchSection) && (kind === 'miter' || sectionValid(headerSection))
+  const holeApprox = kind === 'hole' && (!isRound(branchSection) || !isRound(headerSection))
 
   const spec: JointSpec = useMemo(
     () => ({
       kind,
-      branchOD,
-      headerOD,
+      branchSection,
+      headerSection,
       angleDeg: angle,
       offsetInPlane: off1,
       offsetPerp: off2,
+      sectionRollDeg: sectionRoll,
+      headerRollDeg: headerRoll,
       passThrough,
     }),
-    [kind, branchOD, headerOD, angle, off1, off2, passThrough],
+    [kind, branchSection, headerSection, angle, off1, off2, sectionRoll, headerRoll, passThrough],
   )
 
   return (
@@ -52,20 +61,31 @@ export function SingleJoint() {
           </div>
         </Card>
 
-        <Card title={kind === 'miter' ? 'Tube' : 'Branch (cut tube)'}>
-          <div className="flex gap-2">
-            <LocalNum label="Outside diameter" mm={branchOD} unit={unit} onChangeMm={(mm) => set({ branchOD: mm })} />
-            <PresetPick onPick={(odMm) => set({ branchOD: odMm })} />
-          </div>
-        </Card>
+        <SectionEditor
+          title={kind === 'miter' ? 'Tube' : 'Branch (cut tube)'}
+          section={branchSection}
+          onChange={(s) => set({ branchSection: s })}
+          unit={unit}
+          roll={sectionRoll}
+          onRollChange={(v) => set({ sectionRoll: v })}
+        />
 
         {kind !== 'miter' && (
-          <Card title={kind === 'hole' ? 'Header (pierced tube)' : 'Header (main tube)'}>
-            <div className="flex gap-2">
-              <LocalNum label="Outside diameter" mm={headerOD} unit={unit} onChangeMm={(mm) => set({ headerOD: mm })} />
-              <PresetPick onPick={(odMm) => set({ headerOD: odMm })} />
-            </div>
-          </Card>
+          <SectionEditor
+            title={kind === 'hole' ? 'Header (pierced tube)' : 'Header (main tube)'}
+            section={headerSection}
+            onChange={(s) => set({ headerSection: s })}
+            unit={unit}
+            roll={headerRoll}
+            onRollChange={(v) => set({ headerRoll: v })}
+            extra={
+              holeApprox ? (
+                <p className="mt-2 text-xs text-amber-600">
+                  Square header holes are approximate — the pierced oval is developed as a round tube.
+                </p>
+              ) : undefined
+            }
+          />
         )}
 
         <Card title={kind === 'miter' ? 'Joint angle (each end halved)' : 'Angle between centre lines'}>

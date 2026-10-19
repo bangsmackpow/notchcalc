@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { branchNotch, generate, headerHole } from '../geometry/index.ts'
+import { branchNotch, generate, headerHole, type Section } from '../geometry/index.ts'
 import { buildTemplateDrawing } from './drawing.ts'
+
+const R = (od: number): Section => ({ shape: 'round', od })
 
 describe('generate + stacked drawing for through-branches', () => {
   const templates = generate({
     kind: 'hole',
-    branchOD: 50,
-    headerOD: 70,
+    branchSection: R(50),
+    headerSection: R(70),
     angleDeg: 90,
     offsetInPlane: 0,
     offsetPerp: 0,
+    sectionRollDeg: 0,
+    headerRollDeg: 0,
     passThrough: false,
   })
 
@@ -27,8 +31,8 @@ describe('generate + stacked drawing for through-branches', () => {
 })
 
 describe('buildTemplateDrawing — band stacking', () => {
-  const near = branchNotch({ branchOD: 50, headerOD: 70, angleDeg: 90 })
-  const thru = branchNotch({ branchOD: 50, headerOD: 70, angleDeg: 90, passThrough: true })
+  const near = branchNotch({ branchSection: R(50), headerSection: R(70), angleDeg: 90 })
+  const thru = branchNotch({ branchSection: R(50), headerSection: R(70), angleDeg: 90, passThrough: true })
 
   it('single notch has one cut path', () => {
     const d = buildTemplateDrawing(near, { unit: 'mm' })
@@ -55,7 +59,7 @@ describe('buildTemplateDrawing — band stacking', () => {
 })
 
 describe('length ruler units', () => {
-  const t = branchNotch({ branchOD: 50, headerOD: 70, angleDeg: 90 })
+  const t = branchNotch({ branchSection: R(50), headerSection: R(70), angleDeg: 90 })
 
   it('inch mode labels ticks in inches (with a " suffix)', () => {
     const d = buildTemplateDrawing(t, { unit: 'in' })
